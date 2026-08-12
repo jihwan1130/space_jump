@@ -28,8 +28,9 @@ const PLAYER_R = 11;
 const FLIGHT_TIMEOUT = 2.6;          // 이 시간 안에 착지 못하면 우주 미아
 const CAM_ANCHOR = 0.78;             // 착지한 행성이 놓이는 화면 세로 위치 (아래쪽)
 const CAM_FLY = 0.62;                // 비행 중 카메라가 따라붙는 위치
-const HAZARD_STAGE = 4;              // 목성부터 공간 붕괴가 쫓아온다
-const HAZARD_LAG = 270;              // 붕괴면이 화면 아래로 벌어질 수 있는 최대 거리
+const HAZARD_STAGE = 4;              // 목성부터 화면이 스스로 계속 위로 올라간다
+const ORBIT_SPIN = 2.0;              // 우주선 공전(자전) 속도 배율
+const COMBO_WINDOW = 3.4;            // 이 시간 안에 다음 행성을 잡으면 콤보 유지
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -119,8 +120,8 @@ function diff(stage) {
     gap:    lerp(315, 395, t) + t2 * 30,
     spread: lerp(75, 165, t),
     speed:  lerp(450, 560, t) + t2 * 40,
-    // 공간 붕괴 상승 속도 (px/s)
-    hazard: lerp(80, 175, clamp((stage - HAZARD_STAGE) / 8, 0, 1)) + t2 * 25,
+    // 화면이 저절로 위로 올라가는 속도 (px/s) — 아래로 밀려나면 끝
+    scroll: lerp(22, 50, clamp((stage - HAZARD_STAGE) / 8, 0, 1)) + t2 * 10,
     obstacleChance: stage >= 2 ? Math.min(0.6, (stage - 1) * 0.13) : 0,
     moveChance:     stage >= 3 ? Math.min(0.55, (stage - 2) * 0.13) : 0,
     decayChance:    stage >= 5 ? Math.min(0.45, (stage - 4) * 0.14) : 0,
@@ -143,10 +144,35 @@ const sfx = {
     o.connect(g); g.connect(this.ctx.destination);
     o.start(t); o.stop(t + dur + 0.02);
   },
-  jump()  { this.play(520, 0.14, 'triangle', 0.12, 260); },
-  land()  { this.play(300, 0.18, 'sine', 0.16, 240); },
-  stage() { this.play(440, 0.12, 'square', 0.1, 200); setTimeout(() => this.play(660, 0.22, 'square', 0.1, 160), 110); },
-  die()   { this.play(220, 0.45, 'sawtooth', 0.13, -170); },
+  // 잡음 버스트 (화면 조정 지지직)
+  noise(dur = 0.12, vol = 0.09, lp = 1200) {
+    if (!this.on || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = this.ctx.createBufferSource(); src.buffer = buf;
+    const f = this.ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lp;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.connect(f); f.connect(g); g.connect(this.ctx.destination);
+    src.start(t);
+  },
+  jump()  { this.play(520, 0.14, 'triangle', 0.12, 260); this.noise(0.09, 0.05, 900); },
+  // 콤보가 쌓일수록 음이 올라가는 펜타토닉 사다리
+  land(combo = 1, perfect = false) {
+    const steps = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
+    const f = 330 * Math.pow(2, steps[Math.min(steps.length - 1, combo - 1)] / 12);
+    this.play(f, 0.17, 'triangle', 0.13, f * 0.2);
+    setTimeout(() => this.play(f * 1.5, 0.13, 'sine', 0.075), 55);
+    if (perfect) { setTimeout(() => this.play(f * 2, 0.2, 'sine', 0.085, f * 0.6), 20); }
+  },
+  praise(){ this.play(880, 0.1, 'square', 0.07, 300); setTimeout(() => this.play(1320, 0.16, 'square', 0.06, 260), 80); },
+  stage() { this.play(440, 0.12, 'square', 0.1, 200); setTimeout(() => this.play(660, 0.22, 'square', 0.1, 160), 110); setTimeout(() => this.play(880, 0.3, 'square', 0.09, 200), 230); },
+  warn()  { this.play(150, 0.11, 'square', 0.055, -40); },
+  die()   { this.play(220, 0.45, 'sawtooth', 0.13, -170); this.noise(0.5, 0.12, 2600); },
 };
 
 // ───────────────────────────────────────── 상태
@@ -158,9 +184,17 @@ const state = {
   score: 0,
   best: +(localStorage.getItem('spacejump_best') || 0),
   stage: 1,
-  hazardY: null,           // 아래에서 차오르는 공간 붕괴면의 월드 y (null이면 비활성)
+  scrolling: false,        // 화면이 스스로 위로 올라가는 중인가
+  danger: 0,               // 우주선이 화면 아래 끝에 얼마나 가까운가 (0~1)
+  warnT: 0,                // 근접 경고음 쿨다운
   banner: null,            // {text, sub, warn, t}
   particles: [],
+  pops: [],                // 떠오르는 점수/칭찬 텍스트
+  rings: [],               // 착지 충격파
+  combo: 0, comboT: 0, bestCombo: 0,
+  scorePop: 0,             // HUD 점수 튀는 연출
+  pulse: null,             // {a, max, color} 착지 시 화면 가장자리 발광
+  landed: 0,               // 밟은 행성 수
   stars: [],
   shake: 0,
   overT: 0,
@@ -251,6 +285,20 @@ function burst(x, y, n, color, speed = 140, life = 0.6, size = 3) {
   }
 }
 
+function addPop(x, y, text, color, size = 22, life = 1.1) {
+  state.pops.push({ x, y, text, color, size, t: life, max: life, vy: 46 });
+}
+function addRing(x, y, r0, r1, color, life = 0.55, w = 3) {
+  state.rings.push({ x, y, r0, r1, color, t: life, max: life, w });
+}
+
+// 화면 아래 끝까지 남은 거리 → 위험도 0~1
+function dangerLevel() {
+  if (!state.player) return 0;
+  const sy = state.player.y - state.camY;
+  return clamp(1 - (H - sy) / 300, 0, 1);
+}
+
 // ───────────────────────────────────────── 게임 리셋
 function reset() {
   state.planets = [];
@@ -258,11 +306,21 @@ function reset() {
   state.score = 0;
   state.stage = 1;
   state.particles = [];
+  state.pops = [];
+  state.rings = [];
   state.banner = null;
   state.shake = 0;
   state.flash = 0;
   state.deathMsg = '';
-  state.hazardY = null;
+  state.scrolling = false;
+  state.danger = 0;
+  state.warnT = 0;
+  state.combo = 0;
+  state.comboT = 0;
+  state.bestCombo = 0;
+  state.scorePop = 0;
+  state.pulse = null;
+  state.landed = 0;
   state.player = null;
   // 카메라를 먼저 초기화해야 spawnAhead가 이전 판의 높이까지 행성을 쏟아내지 않는다
   state.camY = (H - 190) - H * CAM_ANCHOR;
@@ -371,7 +429,7 @@ function update(dt) {
       const p = planetById(pl.planetId);
       if (p) {
         // 공전 속도는 행성 자전 속도 크기, 방향은 진입 방향
-        pl.angle += Math.abs(p.spin) * dt * pl.dir;
+        pl.angle += Math.abs(p.spin) * ORBIT_SPIN * dt * pl.dir;
         syncOrbitPos();
         // 붕괴 타이머
         if (p.decay) {
@@ -412,27 +470,32 @@ function update(dt) {
         }
       }
 
-      // 실패 조건 (비행 중)
+      // 실패 조건 (비행 중) — 화면 아래로 밀려나는 판정은 아래에서 일괄 처리
       if (pl.mode === 'fly') {
-        if (pl.y > state.camY + H + 40) die('추락');
-        else if (pl.x < -40 || pl.x > W + 40) die('궤도 이탈');
+        if (pl.x < -40 || pl.x > W + 40) die('궤도 이탈');
         else if (pl.flyT > FLIGHT_TIMEOUT) die('우주 미아');
       }
     }
 
-    // 공간 붕괴 — 목성 라운드부터 아래에서 차올라온다. 멈춰 있으면 삼켜진다.
-    if (state.mode === 'play') {
-      if (state.stage >= HAZARD_STAGE) {
-        if (state.hazardY === null) state.hazardY = state.camY + H + HAZARD_LAG * 2;
-        state.hazardY -= diff(state.stage).hazard * dt;
-        // 너무 뒤처지지 않도록 화면 아래 일정 거리까지만 벌어지게 한다
-        const lag = state.camY + H + HAZARD_LAG;
-        if (state.hazardY > lag) state.hazardY = lag;
-        if (pl.y > state.hazardY) {
-          state.shake = 18;
-          die('공간 붕괴');
-        }
-      }
+    // 목성 라운드부터 화면이 스스로 계속 위로 올라간다.
+    // 점프해서 화면이 밀려 올라가는 것과 같은 움직임이, 멈춰 있어도 천천히 계속 일어난다.
+    if (state.mode === 'play' && state.stage >= HAZARD_STAGE) {
+      state.scrolling = true;
+      state.camTarget -= diff(state.stage).scroll * dt;
+    }
+  }
+
+  // 화면 아래로 밀려나면 끝
+  if (state.mode === 'play') {
+    state.danger = dangerLevel();
+    const sy = pl.y - state.camY;
+    if (sy > H - PLAYER_R * 0.4) {
+      state.shake = 16;
+      // 점프를 놓쳐 떨어진 건지, 올라오는 화면에 밀려난 건지 구분
+      die(pl.mode === 'fly' && pl.vy > 60 ? '추락' : '화면 밖으로 밀려남');
+    } else if (state.scrolling && state.danger > 0.55) {
+      state.warnT -= dt;
+      if (state.warnT <= 0) { state.warnT = lerp(0.5, 0.13, (state.danger - 0.55) / 0.45); sfx.warn(); }
     }
   }
 
@@ -452,6 +515,29 @@ function update(dt) {
     q.x += q.vx * dt; q.y += q.vy * dt;
     q.vx *= 0.94; q.vy *= 0.94;
   }
+
+  // 점수/칭찬 텍스트
+  for (let i = state.pops.length - 1; i >= 0; i--) {
+    const q = state.pops[i];
+    q.t -= dt;
+    if (q.t <= 0) { state.pops.splice(i, 1); continue; }
+    q.y -= q.vy * dt;
+    q.vy *= Math.pow(0.25, dt);
+  }
+  // 착지 충격파
+  for (let i = state.rings.length - 1; i >= 0; i--) {
+    const q = state.rings[i];
+    q.t -= dt;
+    if (q.t <= 0) state.rings.splice(i, 1);
+  }
+
+  // 콤보 유지 시간
+  if (state.comboT > 0) {
+    state.comboT -= dt;
+    if (state.comboT <= 0) state.combo = 0;
+  }
+  state.scorePop = Math.max(0, state.scorePop - dt * 2.6);
+  if (state.pulse) { state.pulse.a -= dt * 1.8; if (state.pulse.a <= 0) state.pulse = null; }
 
   if (state.banner) { state.banner.t -= dt; if (state.banner.t <= 0) state.banner = null; }
   state.shake *= Math.pow(0.001, dt);
@@ -473,10 +559,43 @@ function land(p, dx, dy, dist) {
   syncOrbitPos();
   state.camTarget = Math.min(state.camTarget, p.y - H * CAM_ANCHOR);
 
-  state.score++;
-  state.shake = 5;
-  burst(pl.x, pl.y, 14, p.col.ac, 150, 0.5, 3);
-  sfx.land();
+  // ── 콤보 & 점수
+  state.landed++;
+  state.combo = state.comboT > 0 ? state.combo + 1 : 1;
+  state.comboT = COMBO_WINDOW;
+  if (state.combo > state.bestCombo) state.bestCombo = state.combo;
+
+  const mult = Math.min(9, state.combo);
+  const perfect = dist < p.ring * 0.58;          // 궤도 깊숙이 꽂아 넣은 정밀 착지
+  let gain = 10 * mult + (perfect ? 15 : 0) + (p.isCheckpoint ? 30 : 0);
+  state.score += gain;
+  state.scorePop = 1;
+
+  // ── 시각 연출
+  state.shake = perfect ? 7 : 5;
+  state.pulse = { a: perfect ? 0.6 : 0.34, max: perfect ? 0.6 : 0.34, color: perfect ? '#ffd166' : p.col.c1 };
+  burst(pl.x, pl.y, perfect ? 22 : 14, p.col.ac, perfect ? 210 : 150, 0.5, 3);
+  addRing(p.x, p.y, p.ring * 0.45, p.ring * 1.85, p.col.ac, 0.5, 3);
+  if (perfect) {
+    addRing(p.x, p.y, p.ring * 0.2, p.ring * 2.5, '#ffd166', 0.7, 2);
+    burst(pl.x, pl.y, 12, '#fff1b8', 260, 0.7, 2.5);
+  }
+
+  addPop(pl.x, pl.y - 16, `+${gain}`, perfect ? '#ffd166' : '#ffffff', perfect ? 27 : 22);
+  if (perfect) addPop(pl.x, pl.y - 44, 'PERFECT!', '#ffe28a', 17, 0.95);
+  if (state.combo >= 2) addPop(p.x, p.y - p.ring - 26, `COMBO x${state.combo}`, p.col.c1, 15, 1.0);
+
+  const PRAISE = [
+    [12, 'UNSTOPPABLE!', '#ff9ec4'],
+    [8,  'AMAZING!',     '#c9a4ff'],
+    [5,  'GREAT!',       '#8fe3ff'],
+    [3,  'NICE!',        '#7dffb0'],
+  ];
+  for (const [need, word, color] of PRAISE) {
+    if (state.combo === need) { addPop(p.x, p.y - p.ring - 52, word, color, 21, 1.2); sfx.praise(); break; }
+  }
+
+  sfx.land(state.combo, perfect);
 
   // 스테이지 진입
   if (p.stage !== state.stage) {
@@ -484,13 +603,13 @@ function land(p, dx, dy, dist) {
     state.banner = {
       text: `${p.info.name} 궤도 진입`,
       sub: `STAGE ${p.stage} · ${p.info.sub}`,
-      warn: p.stage === HAZARD_STAGE ? '⚠ 공간 붕괴 시작 — 멈추면 삼켜진다' : null,
+      warn: p.stage === HAZARD_STAGE ? '⚠ 화면이 계속 올라온다 — 밀려나면 끝' : null,
       t: p.stage === HAZARD_STAGE ? 2.8 : 2.0,
     };
     burst(p.x, p.y, 26, p.col.c1, 200, 0.9, 3.5);
+    addRing(p.x, p.y, p.ring * 0.3, p.ring * 3.4, p.col.c1, 1.0, 2.5);
     sfx.stage();
   }
-  void dist;
 }
 
 // ───────────────────────────────────────── 렌더
@@ -624,62 +743,59 @@ function drawPlanet(p) {
   ctx.restore();
 }
 
-function drawHazard() {
-  if (state.hazardY === null) return;
-  const y = state.hazardY - state.camY;
-  if (y > H + 90) return;
+// 올라오는 화면의 아래 경계 — 여기에 닿으면 밀려나 끝난다
+function drawScrollEdge() {
+  if (!state.scrolling) return;
   const t = performance.now() / 1000;
+  const k = clamp(state.danger, 0, 1);
 
   ctx.save();
-  // 붕괴면 아래를 채우는 물결 모양 영역
-  ctx.beginPath();
-  ctx.moveTo(0, H + 120);
-  for (let x = 0; x <= W; x += 12) {
-    const yy = y + Math.sin(x * 0.045 + t * 2.6) * 7 + Math.sin(x * 0.11 - t * 4.1) * 4;
-    ctx.lineTo(x, yy);
-  }
-  ctx.lineTo(W, H + 120);
-  ctx.closePath();
-
-  const g = ctx.createLinearGradient(0, y - 30, 0, y + 220);
-  g.addColorStop(0, 'rgba(255,60,120,.55)');
-  g.addColorStop(0.18, 'rgba(120,10,80,.75)');
-  g.addColorStop(1, 'rgba(12,0,14,.98)');
+  // 아래에서 차오르는 어두운 기운 (가까울수록 짙어진다)
+  const h = 150 + 90 * k;
+  const g = ctx.createLinearGradient(0, H - h, 0, H);
+  g.addColorStop(0, 'rgba(255,45,105,0)');
+  g.addColorStop(1, `rgba(255,45,105,${0.10 + 0.34 * k})`);
   ctx.fillStyle = g;
-  ctx.fill();
-  ctx.strokeStyle = `rgba(255,110,170,${0.75 + 0.25 * Math.sin(t * 8)})`;
-  ctx.lineWidth = 3;
+  ctx.fillRect(0, H - h, W, h);
+
+  // 경계선 — 화면이 밀어 올리는 선
+  ctx.globalAlpha = 0.35 + 0.45 * k;
+  ctx.strokeStyle = '#ff5c8a';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, H - 2);
+  ctx.lineTo(W, H - 2);
   ctx.stroke();
 
-  // 경계 위로 번지는 빛
-  const gl = ctx.createLinearGradient(0, y - 130, 0, y);
-  gl.addColorStop(0, 'rgba(255,60,120,0)');
-  gl.addColorStop(1, 'rgba(255,60,120,.22)');
-  ctx.fillStyle = gl;
-  ctx.fillRect(0, y - 130, W, 130);
-
-  // 빨려 들어가는 입자
-  for (let i = 0; i < 3; i++) {
-    const px = (Math.sin(t * (0.7 + i * 0.3) + i * 2.1) * 0.5 + 0.5) * W;
-    const py = y - ((t * (60 + i * 25) + i * 90) % 150);
-    ctx.globalAlpha = 0.5 * (1 - (y - py) / 150);
-    ctx.fillStyle = '#ff9ec4';
-    ctx.beginPath(); ctx.arc(px, py, 2.5, 0, TAU); ctx.fill();
+  // 경계에서 위로 흘러가는 짧은 선들 — 화면이 올라오는 방향을 보여준다
+  ctx.globalAlpha = 0.3 + 0.4 * k;
+  ctx.strokeStyle = '#ff9ec4';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 7; i++) {
+    const x = ((i * 97 + Math.sin(i * 2.3) * 30) % W + W) % W;
+    const prog = ((t * (0.55 + i * 0.07) + i * 0.37) % 1);
+    const y = H - prog * (110 + 60 * k);
+    ctx.globalAlpha = (0.3 + 0.45 * k) * (1 - prog);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x, y + 12);
+    ctx.stroke();
   }
   ctx.restore();
   ctx.globalAlpha = 1;
 
-  // 임박 경고
-  if (state.mode === 'play') {
-    const dist = state.hazardY - state.player.y;
-    if (dist < 260) {
-      const p = clamp(1 - dist / 260, 0, 1);
-      const v = ctx.createRadialGradient(W / 2, H / 2, H * 0.25, W / 2, H / 2, H * 0.7);
-      v.addColorStop(0, 'rgba(255,0,80,0)');
-      v.addColorStop(1, `rgba(255,0,80,${0.35 * p * (0.6 + 0.4 * Math.sin(t * 12))})`);
-      ctx.fillStyle = v;
-      ctx.fillRect(0, 0, W, H);
-    }
+  // 임박 경고 — 붉은 비네트가 맥동
+  if (k > 0.45) {
+    const p = (k - 0.45) / 0.55;
+    ctx.save();
+    const a = 0.3 * p * (0.55 + 0.45 * Math.sin(t * 14));
+    const v = ctx.createRadialGradient(W / 2, H * 0.62, H * 0.3, W / 2, H * 0.62, H * 0.72);
+    v.addColorStop(0, 'rgba(255,47,109,0)');
+    v.addColorStop(0.6, `rgba(255,47,109,${a * 0.3})`);
+    v.addColorStop(1, `rgba(255,47,109,${a})`);
+    ctx.fillStyle = v;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
   }
 }
 
@@ -712,22 +828,27 @@ function drawAimGuide() {
 function drawPlayer() {
   const pl = state.player;
   const y = pl.y - state.camY;
+  const t = performance.now() / 1000;
 
-  // 꼬리
+  // 꼬리 — 안쪽 흰 코어 + 바깥 청보라 잔광
   if (pl.trail.length > 1) {
     ctx.save();
-    for (let i = 1; i < pl.trail.length; i++) {
-      const a = i / pl.trail.length;
-      ctx.globalAlpha = a * 0.5;
-      ctx.strokeStyle = '#8fd6ff';
-      ctx.lineWidth = a * 8;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(pl.trail[i - 1].x, pl.trail[i - 1].y - state.camY);
-      ctx.lineTo(pl.trail[i].x, pl.trail[i].y - state.camY);
-      ctx.stroke();
+    ctx.lineCap = 'round';
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [wMul, color, aMul] of [[1, '#4a6cff', 0.32], [0.45, '#bff0ff', 0.6]]) {
+      for (let i = 1; i < pl.trail.length; i++) {
+        const a = i / pl.trail.length;
+        ctx.globalAlpha = a * aMul;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = a * 11 * wMul;
+        ctx.beginPath();
+        ctx.moveTo(pl.trail[i - 1].x, pl.trail[i - 1].y - state.camY);
+        ctx.lineTo(pl.trail[i].x, pl.trail[i].y - state.camY);
+        ctx.stroke();
+      }
     }
     ctx.restore();
+    ctx.globalAlpha = 1;
   }
 
   if (state.mode === 'over') return;
@@ -737,37 +858,139 @@ function drawPlayer() {
   if (pl.mode === 'fly') ang = Math.atan2(pl.vy, pl.vx);
   else ang = pl.angle;   // 궤도 중에는 발사될 바깥 방향을 향해 기수를 든다
 
+  const flying = pl.mode === 'fly';
+
   ctx.save();
   ctx.translate(pl.x, y);
-  // 글로우
-  const g = ctx.createRadialGradient(0, 0, 1, 0, 0, 36);
-  g.addColorStop(0, 'rgba(180,225,255,.55)');
-  g.addColorStop(1, 'rgba(180,225,255,0)');
+
+  // 기체 글로우
+  const g = ctx.createRadialGradient(0, 0, 1, 0, 0, 40);
+  g.addColorStop(0, 'rgba(120,200,255,.5)');
+  g.addColorStop(0.45, 'rgba(90,130,255,.22)');
+  g.addColorStop(1, 'rgba(90,130,255,0)');
   ctx.fillStyle = g;
-  ctx.beginPath(); ctx.arc(0, 0, 36, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 0, 40, 0, TAU); ctx.fill();
 
   ctx.rotate(ang);
-  // 분사 (기체 뒤)
-  if (pl.mode === 'fly') {
-    ctx.fillStyle = `rgba(255,190,90,${0.5 + Math.random() * 0.4})`;
-    ctx.beginPath();
-    ctx.moveTo(-9, 6); ctx.lineTo(-18 - Math.random() * 12, 0); ctx.lineTo(-9, -6);
-    ctx.closePath(); ctx.fill();
-  }
-  // 로켓 본체
-  ctx.fillStyle = '#ffffff';
+
+  // ── 엔진 화염 (기체 뒤)
+  const fl = flying ? 30 + Math.sin(t * 70) * 6 + Math.random() * 9
+                    : 10 + Math.sin(t * 22) * 2 + Math.random() * 3;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const fg = ctx.createLinearGradient(-12, 0, -13 - fl, 0);
+  fg.addColorStop(0, 'rgba(210,245,255,.95)');
+  fg.addColorStop(0.3, 'rgba(90,170,255,.7)');
+  fg.addColorStop(0.7, 'rgba(120,70,255,.35)');
+  fg.addColorStop(1, 'rgba(120,70,255,0)');
+  ctx.fillStyle = fg;
   ctx.beginPath();
-  ctx.moveTo(19, 0); ctx.lineTo(-11, 11); ctx.lineTo(-6, 0); ctx.lineTo(-11, -11);
+  ctx.moveTo(-11, 5.2);
+  ctx.quadraticCurveTo(-13 - fl * 0.5, 2.6, -13 - fl, 0);
+  ctx.quadraticCurveTo(-13 - fl * 0.5, -2.6, -11, -5.2);
   ctx.closePath(); ctx.fill();
-  // 날개
-  ctx.fillStyle = '#c9dcff';
+  // 흰 코어
+  ctx.fillStyle = 'rgba(255,255,255,.85)';
   ctx.beginPath();
-  ctx.moveTo(-2, 6); ctx.lineTo(-14, 14); ctx.lineTo(-9, 5); ctx.closePath(); ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(-2, -6); ctx.lineTo(-14, -14); ctx.lineTo(-9, -5); ctx.closePath(); ctx.fill();
-  // 조종석
-  ctx.fillStyle = '#39b8ff';
-  ctx.beginPath(); ctx.arc(4.5, 0, 4.2, 0, TAU); ctx.fill();
+  ctx.moveTo(-11, 2.4);
+  ctx.quadraticCurveTo(-13 - fl * 0.22, 1.1, -12 - fl * 0.42, 0);
+  ctx.quadraticCurveTo(-13 - fl * 0.22, -1.1, -11, -2.4);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  // ── 후퇴익 (본체 뒤에 깔린다)
+  const wg = ctx.createLinearGradient(0, 0, -14, 16);
+  wg.addColorStop(0, '#5f7cc4');
+  wg.addColorStop(1, '#1b2547');
+  for (const s of [1, -1]) {
+    ctx.save();
+    ctx.scale(1, s);
+    ctx.fillStyle = wg;
+    ctx.beginPath();
+    ctx.moveTo(3, 2.6);
+    ctx.lineTo(-8.5, 15.5);
+    ctx.lineTo(-13.5, 15.0);
+    ctx.lineTo(-9, 3.2);
+    ctx.closePath(); ctx.fill();
+    // 앞날 발광 에지
+    ctx.strokeStyle = 'rgba(90,230,255,.85)';
+    ctx.lineWidth = 1.1;
+    ctx.beginPath(); ctx.moveTo(3, 2.6); ctx.lineTo(-8.5, 15.5); ctx.stroke();
+    ctx.restore();
+  }
+
+  // ── 날개 끝 항법등
+  const blink = 0.45 + 0.55 * Math.abs(Math.sin(t * 4.5));
+  for (const [ly, lc] of [[15.4, '#ff4d78'], [-15.4, '#4dffc3']]) {
+    ctx.globalAlpha = blink;
+    const lg = ctx.createRadialGradient(-11, ly, 0.4, -11, ly, 6);
+    lg.addColorStop(0, lc);
+    lg.addColorStop(1, hexA(lc, 0));
+    ctx.fillStyle = lg;
+    ctx.beginPath(); ctx.arc(-11, ly, 6, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(-11, ly, 1.3, 0, TAU); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // ── 본체 (다트형 헐)
+  const hull = () => {
+    ctx.beginPath();
+    ctx.moveTo(20, 0);
+    ctx.bezierCurveTo(13, 3.0, 5, 5.0, -5, 6.1);
+    ctx.lineTo(-11.5, 5.0);
+    ctx.lineTo(-11.5, -5.0);
+    ctx.lineTo(-5, -6.1);
+    ctx.bezierCurveTo(5, -5.0, 13, -3.0, 20, 0);
+    ctx.closePath();
+  };
+  const hg = ctx.createLinearGradient(0, -7, 0, 7);
+  hg.addColorStop(0, '#ffffff');
+  hg.addColorStop(0.34, '#d5e2fb');
+  hg.addColorStop(0.62, '#8496bf');
+  hg.addColorStop(1, '#38446a');
+  ctx.fillStyle = hg;
+  hull(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.55)';
+  ctx.lineWidth = 0.9;
+  hull(); ctx.stroke();
+
+  // 헐 위 액센트 스트라이프
+  ctx.save();
+  hull(); ctx.clip();
+  ctx.fillStyle = 'rgba(0,0,0,.18)';
+  ctx.fillRect(-12, 1.4, 34, 6);
+  ctx.fillStyle = 'rgba(60,220,255,.9)';
+  ctx.fillRect(-9, -0.7, 22, 1.4);
+  ctx.fillStyle = 'rgba(255,120,60,.75)';
+  ctx.fillRect(-9, 2.8, 9, 1.1);
+  ctx.restore();
+
+  // ── 조종석 캐노피
+  const cg = ctx.createLinearGradient(2, -3.4, 11, 3.4);
+  cg.addColorStop(0, '#07142e');
+  cg.addColorStop(0.45, '#2aa7ff');
+  cg.addColorStop(1, '#d8fbff');
+  ctx.fillStyle = cg;
+  ctx.beginPath(); ctx.ellipse(6.4, 0, 6.2, 3.5, 0, 0, TAU); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 0.7;
+  ctx.beginPath(); ctx.ellipse(6.4, 0, 6.2, 3.5, 0, 0, TAU); ctx.stroke();
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.ellipse(8.2, -1.1, 2.1, 0.9, -0.25, 0, TAU); ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // ── 엔진 노즐
+  ctx.fillStyle = '#20263f';
+  ctx.fillRect(-13.2, -4.6, 3.2, 3.2);
+  ctx.fillRect(-13.2, 1.4, 3.2, 3.2);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = `rgba(120,225,255,${flying ? 0.95 : 0.6})`;
+  ctx.fillRect(-13.0, -4.0, 2.2, 2.0);
+  ctx.fillRect(-13.0, 2.0, 2.2, 2.0);
+  ctx.restore();
+
   ctx.restore();
 }
 
@@ -783,19 +1006,118 @@ function drawParticles() {
   ctx.globalAlpha = 1;
 }
 
+function drawRings() {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const q of state.rings) {
+    const k = 1 - q.t / q.max;           // 0 → 1 로 퍼진다
+    const e = 1 - Math.pow(1 - k, 3);    // 처음엔 빠르게, 끝엔 천천히
+    ctx.globalAlpha = (1 - k) * 0.85;
+    ctx.strokeStyle = q.color;
+    ctx.lineWidth = q.w * (1 - k * 0.7);
+    ctx.beginPath();
+    ctx.arc(q.x, q.y - state.camY, lerp(q.r0, q.r1, e), 0, TAU);
+    ctx.stroke();
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+function drawPops() {
+  ctx.save();
+  ctx.textAlign = 'center';
+  for (const q of state.pops) {
+    const k = q.t / q.max;
+    const pop = k > 0.82 ? 1 + (k - 0.82) * 3.2 : 1;   // 나타날 때 살짝 튄다
+    ctx.globalAlpha = Math.min(1, k * 2.6);
+    ctx.save();
+    ctx.translate(q.x, q.y - state.camY);
+    ctx.scale(pop, pop);
+    ctx.font = `bold ${q.size}px -apple-system, "Noto Sans KR", sans-serif`;
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = 'rgba(0,0,0,.55)';
+    ctx.strokeText(q.text, 0, 0);
+    ctx.fillStyle = q.color;
+    ctx.fillText(q.text, 0, 0);
+    ctx.restore();
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+// 착지 순간 화면 가장자리에서 번지는 색 펄스
+function drawPulse() {
+  if (!state.pulse) return;
+  const k = clamp(state.pulse.a / state.pulse.max, 0, 1);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(W / 2, H * 0.6, H * 0.18, W / 2, H * 0.6, H * 0.72);
+  g.addColorStop(0, hexA(state.pulse.color, 0));
+  g.addColorStop(1, hexA(state.pulse.color, 0.42 * k));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+}
+
 function drawHUD() {
   const info = stageInfo(state.stage);
 
-  // 점수
+  // 점수 (착지할 때마다 튄다)
+  const sp = 1 + state.scorePop * 0.28;
+  ctx.save();
+  ctx.textAlign = 'left';
+  ctx.translate(18, 52);
+  ctx.scale(sp, sp);
+  ctx.fillStyle = state.scorePop > 0.4 ? '#ffe9a8' : '#ffffff';
+  ctx.font = 'bold 42px -apple-system, "Noto Sans KR", sans-serif';
+  ctx.globalAlpha = state.mode === 'title' ? 0.15 : 0.92;
+  ctx.fillText(String(state.score), 0, 0);
+  ctx.restore();
   ctx.textAlign = 'left';
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 42px -apple-system, "Noto Sans KR", sans-serif';
-  ctx.globalAlpha = state.mode === 'title' ? 0.15 : 0.9;
-  ctx.fillText(String(state.score), 18, 52);
   ctx.font = '11px monospace';
   ctx.globalAlpha = 0.45;
   ctx.fillText(`BEST ${state.best}`, 20, 70);
   ctx.globalAlpha = 1;
+
+  // 콤보 게이지
+  if (state.mode === 'play' && state.combo >= 2) {
+    const k = clamp(state.comboT / COMBO_WINDOW, 0, 1);
+    const hue = clamp(180 + state.combo * 14, 0, 320);
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = `hsl(${hue},100%,72%)`;
+    ctx.font = 'bold 20px -apple-system, "Noto Sans KR", sans-serif';
+    ctx.fillText(`x${state.combo}`, 20, 96);
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(20, 104, 84, 4);
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = `hsl(${hue},100%,68%)`;
+    ctx.fillRect(20, 104, 84 * k, 4);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  // 화면 상승 압박 미터 — 아래 경계까지 남은 여유
+  if (state.scrolling) {
+    const k = clamp(state.danger, 0, 1);
+    ctx.save();
+    ctx.textAlign = 'right';
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = '#fff';
+    ctx.font = '9px monospace';
+    ctx.fillText('SCREEN RISING', W - 60, 62);
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(W - 130, 68, 70, 4);
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = k > 0.6 ? '#ff2f6d' : '#ff9ec4';
+    ctx.fillRect(W - 130, 68, 70 * k, 4);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
 
   // 스테이지 표시
   ctx.textAlign = 'right';
@@ -905,7 +1227,8 @@ function drawTitle() {
   ctx.fillText('다음 행성의 점선 궤도 안에 들어가면 착지', W / 2, H * 0.62 + 44);
   ctx.fillText('빗나가면 그대로 우주 밖으로 — 타이밍이 전부', W / 2, H * 0.62 + 62);
   ctx.fillStyle = '#ff8fb5';
-  ctx.fillText('목성부터는 공간이 붕괴한다 — 멈추면 삼켜진다', W / 2, H * 0.62 + 84);
+  ctx.fillText('목성부터 화면이 저절로 천천히 계속 올라온다', W / 2, H * 0.62 + 84);
+  ctx.fillText('화면 아래로 밀려나면 끝 — 계속 위로 나아가라', W / 2, H * 0.62 + 102);
   ctx.restore();
   ctx.globalAlpha = 1;
 }
@@ -931,7 +1254,8 @@ function drawOver() {
   ctx.font = '13px -apple-system, "Noto Sans KR", sans-serif';
   const info = stageInfo(state.stage);
   ctx.fillText(`도달: ${info.name} · STAGE ${state.stage}`, W / 2, H * 0.44 + 30);
-  ctx.fillText(`최고 기록 ${state.best}`, W / 2, H * 0.44 + 52);
+  ctx.fillText(`행성 ${state.landed}개 · 최고 콤보 x${state.bestCombo}`, W / 2, H * 0.44 + 52);
+  ctx.fillText(`최고 기록 ${state.best}`, W / 2, H * 0.44 + 74);
 
   if (state.overT > 0.5) {
     ctx.globalAlpha = a * (0.5 + 0.5 * Math.sin(performance.now() / 1000 * 3));
@@ -942,7 +1266,7 @@ function drawOver() {
   ctx.globalAlpha = 1;
 }
 
-function draw() {
+function draw(dt) {
   // 배경
   const bg = ctx.createLinearGradient(0, 0, 0, H);
   const info = stageInfo(state.stage);
@@ -960,10 +1284,14 @@ function draw() {
   drawStars();
   for (const p of state.planets) drawPlanet(p);
   drawAimGuide();
+  drawRings();
   drawPlayer();
   drawParticles();
-  drawHazard();
+  drawPops();
   ctx.restore();
+
+  drawPulse();
+  drawScrollEdge();   // 올라오는 화면 경계는 스크린 좌표계 — 흔들림 밖에서 그린다
 
   if (state.flash > 0) {
     ctx.globalAlpha = state.flash;
@@ -984,7 +1312,7 @@ function loop(now) {
   const dt = Math.min(0.033, (now - last) / 1000);
   last = now;
   update(dt);
-  draw();
+  draw(dt);
   requestAnimationFrame(loop);
 }
 
