@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#05060f" />
+<title>SPACE JUMP — 지구에서 우주 끝까지</title>
+<meta name="description" content="탭 한 번으로 행성 궤도를 갈아타는 원터치 아케이드. 스테이지와 기믹을 한눈에 보는 소개서." />
+<meta property="og:title" content="SPACE JUMP — 지구에서 우주 끝까지" />
+<meta property="og:description" content="탭 한 번으로 행성 궤도를 갈아타는 원터치 아케이드. 콤보를 쌓고 심우주까지 올라가세요." />
+<meta property="og:type" content="website" />
+<style>
+:root {
+  --bg: #05060f;
+  --ink: #ffffff;
+  --dim: rgba(255,255,255,.62);
+  --dimmer: rgba(255,255,255,.42);
+  --line: rgba(255,255,255,.1);
+  --card: rgba(255,255,255,.05);
+  --sky: #5fd0ff;
+  --gold: #ffd166;
+  --rose: #ff6b9d;
+  --mint: #7dffb0;
+  --violet: #b48bff;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+  line-height: 1.6;
+  -webkit-text-size-adjust: 100%;
+  overflow-x: hidden;
+}
+
+/* 배경 성운 — 페이지 전체에 은은하게 깔려요 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(60% 40% at 15% 0%, rgba(49,130,246,.16), transparent 70%),
+    radial-gradient(50% 40% at 90% 20%, rgba(180,75,240,.13), transparent 70%),
+    radial-gradient(70% 50% at 50% 100%, rgba(95,208,255,.08), transparent 70%);
+}
+
+.wrap {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 22px;
+}
+
+section { padding: 64px 0; }
+section + section { border-top: 1px solid var(--line); }
+
+/* ── 헤더 ────────────────────────────────── */
+.hero { padding: 72px 0 56px; text-align: center; }
+
+.badge {
+  display: inline-block;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11.5px;
+  letter-spacing: .06em;
+  color: var(--dim);
+  margin-bottom: 20px;
+}
+
+.logo {
+  font-size: clamp(46px, 13vw, 84px);
+  font-weight: 800;
+  line-height: .98;
+  letter-spacing: -.03em;
+}
+.logo span { display: block; color: var(--sky); }
+
+.tagline {
+  margin-top: 16px;
+  font-size: clamp(14px, 3.6vw, 17px);
+  color: var(--dim);
+}
+
+.hero-demo {
+  width: 100%;
+  max-width: 340px;
+  aspect-ratio: 3 / 4;
+  margin: 30px auto 0;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  overflow: hidden;
+  background: #04050d;
+}
+.hero-demo canvas { display: block; width: 100%; height: 100%; }
+.demo-note {
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--dimmer);
+}
+
+.cta {
+  display: inline-block;
+  margin-top: 26px;
+  padding: 15px 30px;
+  border-radius: 14px;
+  background: #3182f6;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* ── 공통 ────────────────────────────────── */
+h2 {
+  font-size: clamp(21px, 5vw, 27px);
+  font-weight: 800;
+  letter-spacing: -.02em;
+}
+.kicker {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  color: var(--sky);
+  margin-bottom: 8px;
+}
+.lead {
+  margin-top: 12px;
+  font-size: 14.5px;
+  color: var(--dim);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  margin-top: 26px;
+}
+
+.card {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+}
+.card h3 {
+  font-size: 15.5px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.card p {
+  font-size: 13.5px;
+  color: var(--dim);
+}
+.card .tag {
+  display: inline-block;
+  margin-bottom: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+/* 기믹 카드 위에 얹히는 미니 일러스트 */
+.card figure {
+  height: 84px;
+  margin: -4px 0 12px;
+  border-radius: 12px;
+  background: rgba(0,0,0,.28);
+  overflow: hidden;
+}
+.card figure canvas { display: block; width: 100%; height: 100%; }
+
+/* ── 순서 설명 ───────────────────────────── */
+.steps { margin-top: 26px; counter-reset: step; }
+.step {
+  display: flex;
+  gap: 14px;
+  padding: 16px 0;
+  border-bottom: 1px dashed var(--line);
+}
+.step:last-child { border-bottom: 0; }
+.step-no {
+  flex: 0 0 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(95,208,255,.14);
+  color: var(--sky);
+  font-size: 13px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.step h3 { font-size: 15px; font-weight: 700; }
+.step p { font-size: 13.5px; color: var(--dim); margin-top: 2px; }
+
+/* ── 표 ──────────────────────────────────── */
+.table-scroll { overflow-x: auto; margin-top: 24px; }
+table {
+  width: 100%;
+  min-width: 480px;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+th, td {
+  padding: 11px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+th {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--dimmer);
+  text-transform: uppercase;
+}
+td:first-child { font-weight: 700; }
+td.dim { color: var(--dim); font-weight: 400; white-space: normal; }
+
+.dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: -1px;
+}
+
+/* ── 점수 ────────────────────────────────── */
+.score-list { margin-top: 24px; }
+.score-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line);
+}
+.score-row:last-child { border-bottom: 0; }
+.score-row span { font-size: 14px; }
+.score-row small { display: block; font-size: 12px; color: var(--dimmer); font-weight: 400; }
+.score-row b {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+/* ── 팁 ──────────────────────────────────── */
+.tips { margin-top: 24px; list-style: none; }
+.tips li {
+  position: relative;
+  padding-left: 18px;
+  margin-bottom: 11px;
+  font-size: 14px;
+  color: var(--dim);
+}
+.tips li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sky);
+}
+.tips b { color: #fff; font-weight: 600; }
+
+/* ── 마무리 ──────────────────────────────── */
+.finale { text-align: center; padding: 76px 0 40px; }
+.finale h2 { font-size: clamp(24px, 6vw, 34px); }
+.finale p { margin-top: 12px; color: var(--dim); font-size: 14.5px; }
+
+footer {
+  padding: 26px 0 44px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--dimmer);
+  border-top: 1px solid var(--line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ 히어로 ══════════════ -->
+<header class="hero">
+  <div class="wrap">
+    <p class="badge">원터치 아케이드 · 한 판 2분</p>
+    <h1 class="logo">SPACE<span>JUMP</span></h1>
+    <p class="tagline">
+      탭 한 번이면 우주선이 날아갑니다.<br />
+      지구에서 출발해 심우주까지, 궤도를 갈아타며 올라가세요.
+    </p>
+
+    <div class="hero-demo"><canvas id="demo-hero"></canvas></div>
+    <p class="demo-note">실제 게임과 같은 방식으로 그린 미리보기예요.</p>
+
+    <a class="cta" href="./index.html">지금 플레이하기</a>
+  </div>
+</header>
+
+<!-- ══════════════ 한 줄 소개 ══════════════ -->
+<section>
+  <div class="wrap">
+    <p class="kicker">WHAT IS IT</p>
+    <h2>규칙은 하나, 손가락 하나</h2>
+    <p class="lead">
+      우주선은 행성 궤도를 따라 저절로 공전합니다. 화면을 탭하면 그 순간 우주선이
+      바라보던 방향 그대로 직선으로 발사돼요. 다음 행성의 점선 궤도 안에 들어가면 착지,
+      빗나가면 그대로 우주 미아. 배울 건 이게 전부인데, 위로 갈수록 손에 땀이 납니다.
+    </p>
+
+    <div class="grid">
+      <div class="card">
+        <h3>3초면 이해하는 조작</h3>
+        <p>버튼도 조이스틱도 없어요. 화면 아무 곳이나 탭. 언제 누르냐가 곧 실력입니다.</p>
+      </div>
+      <div class="card">
+        <h3>매 판이 새로운 우주</h3>
+        <p>행성 위치·크기·기믹이 매번 새로 생성돼요. 외운 대로 가는 판은 한 번도 없습니다.</p>
+      </div>
+      <div class="card">
+        <h3>한 손, 세로 화면</h3>
+        <p>지하철에서 한 손으로. 세로 고정이라 언제 꺼내도 바로 한 판.</p>
+      </div>
+      <div class="card">
+        <h3>기록으로 겨루기</h3>
+        <p>최고 점수와 최고 콤보가 계정에 남고, 랭킹에서 다른 사람 기록과 나란히 놓입니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ 보석 · 상점 ══════════════ -->
+<section>
+  <div class="wrap">
+    <p class="kicker">GEMS &amp; SHOP</p>
+    <h2>주우면서 올라가고, 모아서 갈아탄다</h2>
+    <p class="lead">
+      행성과 행성 사이 길목에 보석이 떠 있어요. 지나가는 김에 주울 수도, 일부러 돌아갈 수도 있습니다.
+      한 판에서 모은 보석은 <b>게임이 끝날 때 지갑으로 들어와요.</b> 죽어도 사라지지 않습니다.
+    </p>
+
+    <div class="grid">
+      <div class="card">
+        <h3>보석은 흔하지 않아요</h3>
+        <p>행성 25개당 한두 개 정도. 눈에 띄면 대개 가져갈 만한 가치가 있습니다.</p>
+      </div>
+      <div class="card">
+        <h3>스킨 하나에 100개</h3>
+        <p>모은 보석으로 우주선을 바꿔요. 성능 차이는 없습니다 — 순전히 취향의 문제예요.</p>
+      </div>
+    </div>
+
+    <p class="lead" style="margin-top:26px">
+      우주선은 일곱 종류. 진지하게 멋있는 쪽 셋과, 왜 우주에 있는지 알 수 없는 쪽 셋이 있습니다.
+    </p>
+
+    <div class="grid">
+      <div class="card">
+        <figure><canvas class="ship" data-ship="falcon"></canvas></figure>
+        <span class="tag" style="background:rgba(60,255,225,.14); color:#5ff0dc;">멋짐</span>
+        <h3>나이트팰컨 · 오로라 · 타이탄</h3>
+        <p>레이더에 안 잡히는 각진 인터셉터, 빛의 띠를 남기는 유선형 크루저, 뭘 들이받아도 멀쩡할 것 같은 덩치.</p>
+      </div>
+      <div class="card">
+        <figure><canvas class="ship" data-ship="dino"></canvas></figure>
+        <span class="tag" style="background:rgba(255,209,102,.16); color:#ffd166;">웃김</span>
+        <h3>우주공룡 · 양 한 마리 · 성난독수리</h3>
+        <p>우주복은 안 챙겼지만 자신감은 챙긴 공룡, 세다 보면 잠드는 양, 왜 화났는지 아무도 모르는 독수리.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ 플레이 방법 ══════════════ -->
+<section>
+  <div class="wrap">
+    <p class="kicker">HOW TO PLAY</p>
+    <h2>한 번의 점프에서 벌어지는 일</h2>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-no">1</div>
+        <div>
+          <h3>공전하며 각도를 잰다</h3>
+          <p>우주선은 행성 둘레를 돌고 있어요. 코가 향한 방향이 곧 발사 방향입니다. 지구(스테이지 1)에서는 조준선이 보여서 감을 잡기 쉬워요.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-no">2</div>
+        <div>
+          <h3>탭 — 직선으로 발사</h3>
+          <p>중력도 곡선도 없습니다. 누른 순간의 방향으로 곧게 날아가요. 그래서 실패해도 남 탓할 데가 없습니다.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-no">3</div>
+        <div>
+          <h3>다음 궤도에 진입 = 착지</h3>
+          <p>점선 원 안으로 들어가면 자동으로 그 행성을 공전하기 시작해요. 중심에 가깝게 꽂으면 <b>PERFECT</b> 보너스가 붙습니다.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-no">4</div>
+        <div>
+          <h3>쉬지 않으면 콤보</h3>
+          <p>3.4초 안에 다음 행성에 착지하면 콤보가 이어져요. 콤보는 점수 배수라, 망설일수록 손해입니다.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ 기믹 ══════════════ -->
+<section>
+  <div class="wrap">
+    <p class="kicker">GIMMICKS</p>
+    <h2>올라갈수록 하나씩 늘어나는 방해물</h2>
+    <p class="lead">
+      전부 한꺼번에 쏟아지지 않아요. 스테이지마다 하나씩 등장하고, 위로 갈수록 등장 확률이 올라갑니다.
+    </p>
+
+    <div class="grid">
+      <div class="card">
+        <figure><canvas class="mini" data-mini="asteroid"></canvas></figure>
+        <span class="tag" style="background:rgba(255,116,86,.16); color:#ff9c7a;">STAGE 2+</span>
+        <h3>소행성</h3>
+        <p>행성 궤도 바깥을 도는 운석 덩어리. 공전 중이든 비행 중이든 스치기만 해도 끝입니다. 타이밍을 반 박자 늦추는 용기가 필요해요.</p>
+      </div>
+
+      <div class="card">
+        <figure><canvas class="mini" data-mini="move"></canvas></figure>
+        <span class="tag" style="background:rgba(95,208,255,.16); color:#5fd0ff;">STAGE 3+</span>
+        <h3>움직이는 행성</h3>
+        <p>목표가 좌우로 흔들립니다. 지금 있는 자리가 아니라, 도착할 때 있을 자리를 보고 쏴야 해요.</p>
+      </div>
+
+      <div class="card">
+        <figure><canvas class="mini" data-mini="rise"></canvas></figure>
+        <span class="tag" style="background:rgba(255,47,109,.16); color:#ff6b9d;">STAGE 4+</span>
+        <h3>화면 자동 상승</h3>
+        <p>목성부터는 화면이 저절로 올라옵니다. 아래로 밀려나면 그대로 게임 오버. 여기서부터는 정확도가 아니라 속도 싸움이에요.</p>
+      </div>
+
+      <div class="card">
+        <figure><canvas class="mini" data-mini="decay"></canvas></figure>
+        <span class="tag" style="background:rgba(255,209,102,.16); color:#ffd166;">STAGE 5+</span>
+        <h3>붕괴하는 행성</h3>
+        <p>착지하는 순간 카운트다운이 시작돼요. 게이지가 바닥나기 전에 떠나지 않으면 행성과 함께 사라집니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ 스테이지 ══════════════ -->
+<section>
+  <div class="wrap">
+    <p class="kicker">STAGES</p>
+    <h2>지구에서 심우주까지</h2>
+    <p class="lead">
+      행성 10개를 지날 때마다 스테이지가 오릅니다. 배경색과 BGM이 바뀌고, 스테이지 첫 행성은
+      더 크고 점수도 더 줘요. 명왕성 너머부터는 끝없이 이어지는 심우주 구간입니다.
+    </p>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>스테이지</th><th>구간</th><th>이때 새로 생기는 일</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="dot" style="background:#6fd7ff"></span>1 · 지구</td><td class="dim">행성 1–10</td><td class="dim">조준선이 보이는 연습 구간</td></tr>
+          <tr><td><span class="dot" style="background:#ececf4"></span>2 · 달</td><td class="dim">행성 11–20</td><td class="dim">소행성 등장</td></tr>
+          <tr><td><span class="dot" style="background:#ffa268"></span>3 · 화성</td><td class="dim">행성 21–30</td><td class="dim">움직이는 행성 등장</td></tr>
+          <tr><td><span class="dot" style="background:#f7dcae"></span>4 · 목성</td><td class="dim">행성 31–40</td><td class="dim">화면 자동 상승 시작 (초당 22px)</td></tr>
+          <tr><td><span class="dot" style="background:#ffe7ac"></span>5 · 토성</td><td class="dim">행성 41–50</td><td class="dim">붕괴하는 행성 등장</td></tr>
+          <tr><td><span class="dot" style="background:#bdf7f2"></span>6 · 천왕성</td><td class="dim">행성 51–60</td><td class="dim">행성은 작아지고 간격은 넓어져요</td></tr>
+          <tr><td><span class="dot" style="background:#8fb4ff"></span>7 · 해왕성</td><td class="dim">행성 61–70</td><td class="dim">기믹 등장 확률이 계속 상승</td></tr>
+          <tr><td><span class="dot" style="background:#f3e9dc"></span>8 · 명왕성</td><td class="dim">행성 71–80</td><td class="dim">태양계의 끝</td></tr>
+          <tr><td><span class="dot" style="background:#e6b3ff"></span>9 · 외계행성</td><td class="dim">행성 81–90</td><td class="dim">미지의 색으로 물드는 구간</td></tr>
+          <tr><td><span class="dot" style="background:#b48bff"></span>10+ · 심우주</td><td class="dim">행성 91–</td><td class="dim">상승 속도 초당 50px, 무한히 이어짐</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ 점수 ══════════════ -->
+<section>
+  <div class="wrap">
+    <p class="kicker">SCORING</p>
+    <h2>점수는 이렇게 쌓입니다</h2>
+
+    <div class="score-list">
+      <div class="score-row">
+        <span>착지 기본<small>콤보 배수가 그대로 곱해져요 (최대 9배)</small></span>
+        <b>10 × 콤보</b>
+      </div>
+      <div class="score-row">
+        <span>PERFECT 착지<small>궤도 안쪽 깊숙이 꽂았을 때</small></span>
+        <b>+15</b>
+      </div>
+      <div class="score-row">
+        <span>스테이지 첫 행성<small>10개마다 한 번 나오는 커다란 행성</small></span>
+        <b>+30</b>
+      </div>
+      <div class="score-row">
+        <span>콤보 유지 시간<small>이 안에 다음 행성에 닿으면 배수가 이어져요</small></span>
+        <b>3.4초</b>
+      </div>
+    </div>
+
+    <p class="lead">
+      즉, 콤보 9배로 PERFECT 착지를 이어가면 한 번에 105점. 안전하게 한 칸씩 가는 사람과
+      쉬지 않고 붙이는 사람의 점수 차이가 여기서 벌어집니다.
+    </p>
+  </div>
+</section>
+
+<!-- ══════════════ 게임 오버 ══════════════ -->
+<section>
+  <div class="wrap">
+    <p class="kicker">GAME OVER</p>
+    <h2>죽는 방법은 여섯 가지</h2>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>사유</th><th>언제</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>우주 미아</td><td class="dim">발사 후 2.6초 안에 아무 궤도에도 닿지 못했을 때</td></tr>
+          <tr><td>궤도 이탈</td><td class="dim">화면 좌우 밖으로 날아갔을 때</td></tr>
+          <tr><td>소행성 충돌</td><td class="dim">공전 중이든 비행 중이든 운석에 스쳤을 때</td></tr>
+          <tr><td>행성 붕괴</td><td class="dim">붕괴 게이지가 다 닳도록 그 행성에 머물렀을 때</td></tr>
+          <tr><td>추락</td><td class="dim">아래로 떨어져 화면 밑으로 빠졌을 때</td></tr>
+          <tr><td>화면 밖으로 밀려남</td><td class="dim">올라오는 화면에 따라잡혔을 때</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <span class="tag" style="background:rgba(180,139,255,.16); color:#c9a4ff;">한 판에 한 번</span>
+        <h3>이어하기</h3>
+        <p>
+          아깝게 끝난 판은 광고를 끝까지 보고 살아날 수 있어요. 마지막으로 밟았던 행성에서
+          <b>점수와 콤보 기록을 그대로 유지한 채</b> 다시 시작하고, 주변 위험 요소가 치워진
+          상태로 잠깐 무적 시간이 주어집니다. 기회는 한 판에 딱 한 번.
+        </p>
+      </div>
+      <div class="card">
+        <span class="tag" style="background:rgba(125,255,176,.16); color:#7dffb0;">기록</span>
+        <h3>랭킹과 저장</h3>
+        <p>
+          최고 점수와 최고 콤보는 계정에 저장돼서 기기를 바꿔도 남아요. 한 판이 끝날 때마다
+          점수가 랭킹에 올라가고, 게임 시작 화면에서 바로 순위를 확인할 수 있습니다.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ 팁 ══════════════ -->
+<section>
+  <div class="wrap">
+    <p class="kicker">TIPS</p>
+    <h2>처음 100점을 넘기는 법</h2>
+    <ul class="tips">
+      <li><b>행성 중심을 노리세요.</b> 궤도 끄트머리에 걸치는 것보다 안쪽에 꽂는 게 안전하고, PERFECT 보너스까지 붙어요.</li>
+      <li><b>공전 방향을 세어보세요.</b> 우주선이 위쪽을 지나는 순간이 대체로 다음 행성으로 가는 가장 짧은 길입니다.</li>
+      <li><b>움직이는 행성은 끝점에서 잡으세요.</b> 좌우로 흔들리다 방향을 바꾸는 순간 잠깐 멈춰 있는 것처럼 보여요.</li>
+      <li><b>소행성은 지나간 직후를 노리세요.</b> 눈앞에서 비켜난 다음이 가장 넓게 열려 있습니다.</li>
+      <li><b>목성부터는 멈추지 마세요.</b> 화면이 계속 올라오기 때문에, 고민하는 시간이 곧 체력 소모입니다.</li>
+      <li><b>붕괴 행성은 착지하자마자 다음을 보세요.</b> 게이지를 보고 판단하면 이미 늦어요.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ══════════════ 마무리 ══════════════ -->
+<div class="finale">
+  <div class="wrap">
+    <h2>어디까지 올라갈 수 있나요?</h2>
+    <p>대부분은 목성에서 멈춥니다. 심우주를 본 사람은 아직 많지 않아요.</p>
+    <a class="cta" href="./index.html">한 판 해보기</a>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">SPACE JUMP · 앱인토스 미니앱</div>
+</footer>
+
+<script type="module">
+/**
+ * 소개 페이지의 미리보기 그림들.
+ *
+ * 게임과 똑같은 방식(캔버스 직접 드로잉)으로 그려요. 이모지나 이미지 파일을 쓰지 않으니
+ * 기기·브라우저가 달라도 보이는 모습이 같아요.
+ */
+const TAU = Math.PI * 2;
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+
+/** 캔버스를 DPR에 맞춰 세팅하고, 논리 좌표 크기를 돌려줘요. */
+function setup(canvas) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = canvas.clientWidth || 300;
+  const h = canvas.clientHeight || 200;
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w, h };
+}
+
+/* ── 별 ─────────────────────────────────── */
+
+function makeStars(n, w, h) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    out.push({ x: rand(0, w), y: rand(0, h), s: rand(0.6, 1.6), z: rand(0.2, 1), tw: rand(0, TAU) });
+  }
+  return out;
+}
+
+function drawStars(ctx, stars, t) {
+  for (const s of stars) {
+    ctx.globalAlpha = s.z * (0.55 + 0.45 * Math.sin(t * 2 + s.tw));
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(s.x, s.y, s.s, s.s);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ── 행성 ───────────────────────────────── */
+
+function drawPlanet(ctx, x, y, r, ring, c1, c2, ac, rot, opts = {}) {
+  // 점선 궤도
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rot * 0.5);
+  ctx.setLineDash([6, 8]);
+  ctx.lineWidth = 1.4;
+  ctx.strokeStyle = opts.ringColor || 'rgba(255,255,255,.3)';
+  ctx.beginPath();
+  ctx.arc(0, 0, ring, 0, TAU);
+  ctx.stroke();
+  ctx.restore();
+
+  // 헤일로
+  const glow = ctx.createRadialGradient(x, y, r * 0.6, x, y, r * 2.1);
+  glow.addColorStop(0, c1 + '44');
+  glow.addColorStop(1, c1 + '00');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(x, y, r * 2.1, 0, TAU);
+  ctx.fill();
+
+  // 본체
+  const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
+  g.addColorStop(0, c1);
+  g.addColorStop(1, c2);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, TAU);
+  ctx.fill();
+
+  // 대기 띠
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, TAU);
+  ctx.clip();
+  ctx.translate(x, y);
+  ctx.rotate(rot);
+  ctx.globalAlpha = 0.28;
+  ctx.fillStyle = ac;
+  for (let i = -3; i <= 3; i++) {
+    ctx.beginPath();
+    ctx.ellipse(0, i * r * 0.32, r * 1.2, r * 0.1, 0, 0, TAU);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ── 우주선 ─────────────────────────────── */
+
+function drawShip(ctx, x, y, ang, t, flying) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  const g = ctx.createRadialGradient(0, 0, 1, 0, 0, 34);
+  g.addColorStop(0, 'rgba(120,200,255,.42)');
+  g.addColorStop(1, 'rgba(90,130,255,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, 0, 34, 0, TAU);
+  ctx.fill();
+
+  ctx.rotate(ang);
+
+  // 화염
+  const fl = flying ? 26 + Math.sin(t * 60) * 5 : 9 + Math.sin(t * 20) * 2;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const fg = ctx.createLinearGradient(-11, 0, -12 - fl, 0);
+  fg.addColorStop(0, 'rgba(210,245,255,.9)');
+  fg.addColorStop(0.35, 'rgba(90,170,255,.6)');
+  fg.addColorStop(1, 'rgba(120,70,255,0)');
+  ctx.fillStyle = fg;
+  ctx.beginPath();
+  ctx.moveTo(-10, 4.6);
+  ctx.quadraticCurveTo(-12 - fl * 0.5, 2.3, -12 - fl, 0);
+  ctx.quadraticCurveTo(-12 - fl * 0.5, -2.3, -10, -4.6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // 날개
+  const wg = ctx.createLinearGradient(0, 0, -13, 14);
+  wg.addColorStop(0, '#5f7cc4');
+  wg.addColorStop(1, '#1b2547');
+  for (const s of [1, -1]) {
+    ctx.save();
+    ctx.scale(1, s);
+    ctx.fillStyle = wg;
+    ctx.beginPath();
+    ctx.moveTo(3, 2.4);
+    ctx.lineTo(-7.6, 13.8);
+    ctx.lineTo(-12, 13.4);
+    ctx.lineTo(-8, 2.9);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // 동체
+  const hull = () => {
+    ctx.beginPath();
+    ctx.moveTo(18, 0);
+    ctx.bezierCurveTo(11.6, 2.7, 4.5, 4.5, -4.5, 5.4);
+    ctx.lineTo(-10.2, 4.4);
+    ctx.lineTo(-10.2, -4.4);
+    ctx.lineTo(-4.5, -5.4);
+    ctx.bezierCurveTo(4.5, -4.5, 11.6, -2.7, 18, 0);
+    ctx.closePath();
+  };
+  const hg = ctx.createLinearGradient(0, -6, 0, 6);
+  hg.addColorStop(0, '#ffffff');
+  hg.addColorStop(0.34, '#d5e2fb');
+  hg.addColorStop(0.62, '#8496bf');
+  hg.addColorStop(1, '#38446a');
+  ctx.fillStyle = hg;
+  hull();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.5)';
+  ctx.lineWidth = 0.8;
+  hull();
+  ctx.stroke();
+
+  // 캐노피
+  const cg = ctx.createLinearGradient(2, -3, 10, 3);
+  cg.addColorStop(0, '#07142e');
+  cg.addColorStop(0.45, '#2aa7ff');
+  cg.addColorStop(1, '#d8fbff');
+  ctx.fillStyle = cg;
+  ctx.beginPath();
+  ctx.ellipse(5.7, 0, 5.5, 3.1, 0, 0, TAU);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/* ── 소행성 ─────────────────────────────── */
+
+/** 게임(src/game.js)의 소행성과 같은 방식으로 생김새를 뽑아요. */
+function makeAsteroid() {
+  const n = 13;
+  const base = [];
+  for (let i = 0; i < n; i++) base.push(rand(0.66, 1.0));
+  const shape = base.map((v, i) => v * 0.74 + base[(i + 1) % n] * 0.13 + base[(i + n - 1) % n] * 0.13);
+
+  const craters = [];
+  const count = 3 + Math.floor(Math.random() * 3);
+  for (let attempt = 0; attempt < 40 && craters.length < count; attempt++) {
+    const a = rand(0, TAU);
+    const d = rand(0.05, 0.46);
+    const c = { x: Math.cos(a) * d, y: Math.sin(a) * d, r: rand(0.11, 0.24) };
+    if (craters.every((o) => Math.hypot(o.x - c.x, o.y - c.y) > (o.r + c.r) * 1.15)) craters.push(c);
+  }
+
+  const grit = [];
+  for (let i = 0; i < 7; i++) {
+    const a = rand(0, TAU);
+    const d = rand(0.1, 0.7);
+    grit.push({ x: Math.cos(a) * d, y: Math.sin(a) * d, r: rand(0.03, 0.07) });
+  }
+
+  const hue = rand(12, 34);
+  return {
+    shape,
+    craters,
+    grit,
+    squash: rand(0.72, 0.92),
+    tilt: rand(0, TAU),
+    rot: rand(0, TAU),
+    spin: rand(0.4, 1.1) * (Math.random() < 0.5 ? -1 : 1),
+    col: {
+      hi: `hsl(${hue},16%,${rand(58, 68)}%)`,
+      mid: `hsl(${hue},15%,${rand(30, 38)}%)`,
+      low: `hsl(${hue},22%,11%)`,
+    },
+  };
+}
+
+function drawAsteroid(ctx, cx, cy, r, look) {
+  const { shape, craters, grit, col, squash } = look;
+  const n = shape.length;
+  const ang = look.tilt + look.rot;
+  const cs = Math.cos(ang);
+  const sn = Math.sin(ang);
+  const toWorld = (lx, ly) => ({ x: cx + lx * cs - ly * sn, y: cy + lx * sn + ly * cs });
+
+  ctx.save();
+
+  const halo = ctx.createRadialGradient(cx, cy, r * 0.8, cx, cy, r * 2.2);
+  halo.addColorStop(0, 'rgba(255,110,80,.32)');
+  halo.addColorStop(0.5, 'rgba(255,88,78,.12)');
+  halo.addColorStop(1, 'rgba(255,88,78,0)');
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 2.2, 0, TAU);
+  ctx.fill();
+
+  const px = (i) => {
+    const k = ((i % n) + n) % n;
+    const a = (k / n) * TAU;
+    const rr = r * shape[k];
+    return toWorld(Math.cos(a) * rr, Math.sin(a) * rr * squash);
+  };
+  const body = () => {
+    const first = px(0);
+    const last = px(n - 1);
+    ctx.beginPath();
+    ctx.moveTo((last.x + first.x) / 2, (last.y + first.y) / 2);
+    for (let i = 0; i < n; i++) {
+      const cur = px(i);
+      const nxt = px(i + 1);
+      ctx.quadraticCurveTo(cur.x, cur.y, (cur.x + nxt.x) / 2, (cur.y + nxt.y) / 2);
+    }
+    ctx.closePath();
+  };
+
+  const rock = ctx.createRadialGradient(
+    cx - r * 0.4, cy - r * 0.44, r * 0.08,
+    cx + r * 0.14, cy + r * 0.16, r * 1.1
+  );
+  rock.addColorStop(0, col.hi);
+  rock.addColorStop(0.42, col.mid);
+  rock.addColorStop(1, col.low);
+  ctx.fillStyle = rock;
+  body();
+  ctx.fill();
+
+  ctx.save();
+  body();
+  ctx.clip();
+
+  for (const cr of craters) {
+    const c = toWorld(cr.x * r, cr.y * r * squash);
+    const kr = cr.r * r;
+    ctx.fillStyle = 'rgba(0,0,0,.4)';
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y, kr, kr * 0.86, ang, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,236,214,.3)';
+    ctx.lineWidth = Math.max(0.55, kr * 0.26);
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, kr * 0.76, -Math.PI * 0.12, Math.PI * 0.72);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.13)';
+    ctx.lineWidth = Math.max(0.5, kr * 0.16);
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, kr * 1.02, Math.PI * 0.95, Math.PI * 1.75);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = 'rgba(0,0,0,.22)';
+  for (const s of grit) {
+    const g = toWorld(s.x * r, s.y * r * squash);
+    ctx.beginPath();
+    ctx.arc(g.x, g.y, Math.max(0.4, s.r * r), 0, TAU);
+    ctx.fill();
+  }
+
+  const lit = ctx.createLinearGradient(cx - r, cy - r, cx + r * 0.4, cy + r * 0.55);
+  lit.addColorStop(0, 'rgba(255,246,236,.22)');
+  lit.addColorStop(0.5, 'rgba(255,246,236,0)');
+  ctx.fillStyle = lit;
+  ctx.fillRect(cx - r * 1.2, cy - r * 1.2, r * 2.4, r * 2.4);
+
+  const dark = ctx.createLinearGradient(cx, cy, cx + r * 0.9, cy + r * 0.9);
+  dark.addColorStop(0, 'rgba(0,0,0,0)');
+  dark.addColorStop(1, 'rgba(0,0,0,.5)');
+  ctx.fillStyle = dark;
+  ctx.fillRect(cx - r * 1.2, cy - r * 1.2, r * 2.4, r * 2.4);
+  ctx.restore();
+
+  ctx.save();
+  body();
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(0,0,0,.5)';
+  ctx.lineWidth = Math.max(0.8, r * 0.1);
+  body();
+  ctx.stroke();
+  const rim = ctx.createLinearGradient(cx - r * 0.9, cy - r * 0.9, cx + r * 0.6, cy + r * 0.6);
+  rim.addColorStop(0, 'rgba(255,231,205,.5)');
+  rim.addColorStop(0.5, 'rgba(255,231,205,.06)');
+  rim.addColorStop(1, 'rgba(255,150,110,.16)');
+  ctx.strokeStyle = rim;
+  ctx.lineWidth = Math.max(0.7, r * 0.11);
+  body();
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.restore();
+}
+
+/* ── 히어로 데모: 공전 → 발사 → 착지를 반복해요 ── */
+
+function heroDemo(canvas) {
+  let { ctx, w, h } = setup(canvas);
+  let stars = makeStars(90, w, h);
+
+  const lower = { x: w * 0.5, y: h * 0.74, r: 30, ring: 66, c1: '#6fd7ff', c2: '#1a5fae', ac: '#7dffb0' };
+  const upper = { x: w * 0.38, y: h * 0.26, r: 24, ring: 56, c1: '#ffa268', c2: '#9c331a', ac: '#ffcf9e' };
+  const rock = makeAsteroid();
+
+  let angle = -Math.PI / 2;
+  let phase = 'orbit';
+  let ship = { x: 0, y: 0, vx: 0, vy: 0 };
+  let trail = [];
+  let wait = 0;
+  let rockA = 0;
+
+  const resize = () => {
+    ({ ctx, w, h } = setup(canvas));
+    stars = makeStars(90, w, h);
+    lower.x = w * 0.5; lower.y = h * 0.74;
+    upper.x = w * 0.38; upper.y = h * 0.26;
+  };
+  window.addEventListener('resize', resize);
+
+  let last = performance.now();
+  const frame = (now) => {
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    const t = now / 1000;
+    rockA += dt * 1.1;
+    rock.rot += rock.spin * dt;
+
+    ctx.clearRect(0, 0, w, h);
+    const bg = ctx.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, '#04050d');
+    bg.addColorStop(1, '#0a0a1c');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+    drawStars(ctx, stars, t);
+
+    drawPlanet(ctx, upper.x, upper.y, upper.r, upper.ring, upper.c1, upper.c2, upper.ac, t * 0.6);
+    drawPlanet(ctx, lower.x, lower.y, lower.r, lower.ring, lower.c1, lower.c2, lower.ac, t * 0.8);
+
+    // 목표 행성 궤도 바깥을 도는 운석
+    drawAsteroid(
+      ctx,
+      upper.x + Math.cos(rockA) * (upper.ring + 26),
+      upper.y + Math.sin(rockA) * (upper.ring + 26),
+      11,
+      rock
+    );
+
+    let ang = 0;
+    if (phase === 'orbit') {
+      angle += dt * 1.5;
+      ship.x = lower.x + Math.cos(angle) * lower.ring;
+      ship.y = lower.y + Math.sin(angle) * lower.ring;
+      ang = angle;
+
+      // 위쪽 행성을 향할 때 발사 — 실제 플레이의 타이밍 감각을 보여줘요
+      const toTarget = Math.atan2(upper.y - lower.y, upper.x - lower.x);
+      let diff = Math.atan2(Math.sin(angle - toTarget), Math.cos(angle - toTarget));
+      if (Math.abs(diff) < 0.06) {
+        phase = 'fly';
+        ship.vx = Math.cos(angle) * 300;
+        ship.vy = Math.sin(angle) * 300;
+        trail = [];
+      }
+    } else if (phase === 'fly') {
+      ship.x += ship.vx * dt;
+      ship.y += ship.vy * dt;
+      ang = Math.atan2(ship.vy, ship.vx);
+      trail.push({ x: ship.x, y: ship.y });
+      if (trail.length > 16) trail.shift();
+      if (Math.hypot(ship.x - upper.x, ship.y - upper.y) <= upper.ring) {
+        phase = 'landed';
+        wait = 1.1;
+      } else if (ship.y < -40 || ship.x < -40 || ship.x > w + 40) {
+        phase = 'orbit';
+        angle = -Math.PI / 2;
+      }
+    } else {
+      angle += dt * 1.5;
+      ship.x = upper.x + Math.cos(angle) * upper.ring;
+      ship.y = upper.y + Math.sin(angle) * upper.ring;
+      ang = angle;
+      wait -= dt;
+      if (wait <= 0) {
+        phase = 'orbit';
+        angle = -Math.PI / 2;
+        trail = [];
+      }
+    }
+
+    if (trail.length > 1) {
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 1; i < trail.length; i++) {
+        const a = i / trail.length;
+        ctx.globalAlpha = a * 0.5;
+        ctx.strokeStyle = '#bff0ff';
+        ctx.lineWidth = a * 5;
+        ctx.beginPath();
+        ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
+        ctx.lineTo(trail[i].x, trail[i].y);
+        ctx.stroke();
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+
+    drawShip(ctx, ship.x, ship.y, ang, t, phase === 'fly');
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+
+/* ── 기믹 카드 미니 그림 ─────────────────── */
+
+function miniDemo(canvas, kind) {
+  let { ctx, w, h } = setup(canvas);
+  const rock = makeAsteroid();
+  window.addEventListener('resize', () => ({ ctx, w, h } = setup(canvas)));
+
+  let last = performance.now();
+  const frame = (now) => {
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    const t = now / 1000;
+
+    ctx.clearRect(0, 0, w, h);
+    const cx = w / 2;
+    const cy = h / 2;
+
+    if (kind === 'asteroid') {
+      rock.rot += rock.spin * dt;
+      drawPlanet(ctx, cx, cy, 15, 30, '#f7dcae', '#a06a35', '#ffe9c4', t * 0.7);
+      const a = t * 1.5;
+      drawAsteroid(ctx, cx + Math.cos(a) * 44, cy + Math.sin(a) * 27, 10, rock);
+    } else if (kind === 'move') {
+      const dx = Math.sin(t * 1.3) * 32;
+      // 지나온 자리를 흐리게 남겨 흔들림이 보이게
+      for (let i = 1; i <= 3; i++) {
+        ctx.globalAlpha = 0.12 / i;
+        ctx.fillStyle = '#5fd0ff';
+        ctx.beginPath();
+        ctx.arc(cx + Math.sin((t - i * 0.16) * 1.3) * 32, cy, 15, 0, TAU);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      drawPlanet(ctx, cx + dx, cy, 15, 31, '#6fd7ff', '#1a5fae', '#7dffb0', t * 0.7);
+    } else if (kind === 'rise') {
+      // 위로 흐르는 선 + 아래에서 차오르는 붉은 경계
+      ctx.strokeStyle = 'rgba(255,158,196,.5)';
+      ctx.lineWidth = 1.4;
+      for (let i = 0; i < 9; i++) {
+        const x = ((i * 37) % w) + 8;
+        const prog = ((t * 0.7 + i * 0.11) % 1);
+        const y = h - prog * h;
+        ctx.globalAlpha = 0.6 * (1 - prog);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y + 11);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      const k = 0.55 + 0.45 * Math.sin(t * 3);
+      const g = ctx.createLinearGradient(0, h * 0.35, 0, h);
+      g.addColorStop(0, 'rgba(255,45,105,0)');
+      g.addColorStop(1, `rgba(255,45,105,${0.3 + 0.3 * k})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, h * 0.35, w, h * 0.65);
+      ctx.strokeStyle = `rgba(255,92,138,${0.6 + 0.4 * k})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, h - 2);
+      ctx.lineTo(w, h - 2);
+      ctx.stroke();
+    } else if (kind === 'decay') {
+      const cycle = (t % 3) / 3;
+      const left = 1 - cycle;
+      ctx.globalAlpha = clamp(0.25 + left, 0, 1);
+      drawPlanet(ctx, cx, cy - 6, 15, 31, '#ffe7ac', '#b0802f', '#ffd98a', t * 0.7, {
+        ringColor: `rgba(255,${Math.round(90 + 120 * left)},90,.75)`,
+      });
+      ctx.globalAlpha = 1;
+      const bw = 66;
+      ctx.fillStyle = 'rgba(255,255,255,.16)';
+      ctx.fillRect(cx - bw / 2, h - 16, bw, 4);
+      ctx.fillStyle = left > 0.35 ? '#ffd166' : '#ff6b6b';
+      ctx.fillRect(cx - bw / 2, h - 16, bw * left, 4);
+    }
+
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+
+/* ── 시작 — 화면에 들어올 때만 돌려요 ────── */
+
+const hero = document.getElementById('demo-hero');
+if (hero) heroDemo(hero);
+for (const c of document.querySelectorAll('canvas.mini')) {
+  miniDemo(c, c.dataset.mini);
+}
+
+/* ── 우주선 스킨 미리보기 (게임과 같은 그림을 그대로 가져와요) ── */
+import('./src/skins.js')
+  .then(({ getSkin, drawSkinPreview }) => {
+    for (const canvas of document.querySelectorAll('canvas.ship')) {
+      const { ctx, w, h } = setup(canvas);
+      // 카드마다 세 척을 번갈아 보여줘요
+      const ids =
+        canvas.dataset.ship === 'dino'
+          ? ['dino', 'sheep', 'eagle']
+          : ['falcon', 'aurora', 'titan'];
+      const tick = () => {
+        const t = performance.now() / 1000;
+        ctx.clearRect(0, 0, w, h);
+        const slot = w / ids.length;
+        ids.forEach((id, i) => {
+          ctx.save();
+          ctx.translate(i * slot, 0);
+          drawSkinPreview(ctx, getSkin(id), slot, h, t + i * 0.6);
+          ctx.restore();
+        });
+        requestAnimationFrame(tick);
+      };
+      tick();
+    }
+  })
+  .catch(() => {
+    /* 미리보기는 없어도 페이지는 그대로 읽혀요 */
+  });
+</script>
+</body>
+</html>

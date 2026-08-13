@@ -11,6 +11,8 @@
  *    우측 상단은 프레임워크의 X · 더보기 버튼 자리라 비워둬요.
  */
 import { audio } from './audio.js';
+import { getSkin, DEFAULT_SKIN } from './skins.js';
+import { GEM_CHANCE } from './config.js';
 
 /* ────────────────────────────── 상수 */
 
@@ -18,7 +20,7 @@ const W = 480; // 논리 가로 해상도 (고정)
 const H_MIN = 720;
 const H_MAX = 1120;
 
-const PLANETS_PER_STAGE = 8;
+const PLANETS_PER_STAGE = 10;
 const PLAYER_R = 11;
 const FLIGHT_TIMEOUT = 2.6;
 const CAM_ANCHOR = 0.78;
@@ -27,6 +29,8 @@ const HAZARD_STAGE = 4; // 목성부터 화면이 스스로 올라와요
 const ORBIT_SPIN = 2.0;
 const COMBO_WINDOW = 3.4;
 const REVIVE_GRACE = 2.2; // 이어하기 직후 무적 시간(초)
+const GEM_R = 10; // 보석 크기(반경)
+const GEM_PICKUP = 26; // 이 거리 안에 들어오면 먹어요 (넉넉하게 — 놓치면 아까우니까)
 
 /** 우측 상단 내비게이션 버튼이 차지하는 영역 (논리 px) */
 const NAV_RESERVE_W = 116;
@@ -210,9 +214,12 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
     flash: 0,
     invuln: 0,
     revives: 0,
+    gemItems: [], // 화면에 떠 있는 보석들
+    gems: 0, // 이번 판에서 주운 개수
   };
 
   let planetSeq = 0;
+  let skin = getSkin(DEFAULT_SKIN);
 
   function makeStars() {
     state.stars = [];
@@ -229,6 +236,58 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
   makeStars();
 
   /* ── 행성 생성 */
+
+  /**
+   * 소행성 한 덩이의 생김새를 미리 정해둬요.
+   * 울퉁불퉁한 실루엣 · 크레이터 · 암석 색을 개체마다 다르게 뽑아서
+   * 같은 화면에 여러 개가 떠 있어도 복제품처럼 보이지 않아요.
+   *
+   * 실루엣 반지름은 1.0을 넘지 않게 잡아요. 그려진 바위가 판정 반경보다
+   * 커지면 "안 닿았는데 죽었다"처럼 보이거든요.
+   */
+  function makeAsteroidLook() {
+    const n = 13;
+    const base = [];
+    for (let i = 0; i < n; i++) base.push(rand(0.66, 1.0));
+    // 이웃한 굴곡을 조금만 섞어요. 너무 많이 섞으면 그냥 동그란 공이 돼요.
+    const shape = base.map((v, i) => v * 0.74 + base[(i + 1) % n] * 0.13 + base[(i + n - 1) % n] * 0.13);
+
+    // 크레이터는 서로 겹치지 않게 놓아요. 겹치면 구덩이가 아니라 얼룩처럼 보여요.
+    const craters = [];
+    const count = 3 + Math.floor(Math.random() * 3);
+    for (let attempt = 0; attempt < 40 && craters.length < count; attempt++) {
+      const a = rand(0, TAU);
+      const dist = rand(0.05, 0.46);
+      const c = { x: Math.cos(a) * dist, y: Math.sin(a) * dist, r: rand(0.11, 0.24) };
+      if (craters.every((o) => Math.hypot(o.x - c.x, o.y - c.y) > (o.r + c.r) * 1.15)) {
+        craters.push(c);
+      }
+    }
+
+    // 잔 알갱이 — 표면이 매끈해 보이지 않게 뿌려요.
+    const grit = [];
+    for (let i = 0; i < 7; i++) {
+      const a = rand(0, TAU);
+      const dist = rand(0.1, 0.7);
+      grit.push({ x: Math.cos(a) * dist, y: Math.sin(a) * dist, r: rand(0.03, 0.07) });
+    }
+
+    const hue = rand(12, 34);
+    return {
+      shape,
+      craters,
+      grit,
+      squash: rand(0.72, 0.92), // 감자처럼 한쪽으로 눌린 형태
+      tilt: rand(0, TAU),
+      rot: rand(0, TAU),
+      spin: rand(0.4, 1.1) * (Math.random() < 0.5 ? -1 : 1),
+      col: {
+        hi: `hsl(${hue},16%,${rand(58, 68)}%)`,
+        mid: `hsl(${hue},15%,${rand(30, 38)}%)`,
+        low: `hsl(${hue},22%,11%)`,
+      },
+    };
+  }
 
   function createPlanet(index, x, y) {
     const stage = Math.floor(index / PLANETS_PER_STAGE) + 1;
@@ -259,7 +318,13 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
           : null,
       obstacle:
         index > 0 && Math.random() < d.obstacleChance
-          ? { a: rand(0, TAU), sp: rand(1.6, 3.0) * (Math.random() < 0.5 ? -1 : 1), d: ring + rand(28, 42), r: 13 }
+          ? {
+              a: rand(0, TAU),
+              sp: rand(1.6, 3.0) * (Math.random() < 0.5 ? -1 : 1),
+              d: ring + rand(28, 42),
+              r: 13,
+              look: makeAsteroidLook(),
+            }
           : null,
       decay: 0,
       timer: 0,
@@ -295,12 +360,30 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
         y = prev.y - rand(d.gap * 0.8, d.gap * 1.1);
       }
       state.planets.push(createPlanet(index, x, y));
+
+      // 보석은 방금 만든 행성과 그 앞 행성 **사이**에 놓아요.
+      // 비행 경로 위에 있어야 "일부러 주우러 가는" 선택이 생겨요.
+      if (prev && index > 1 && Math.random() < GEM_CHANCE) {
+        const k = rand(0.4, 0.62); // 앞 행성에서 얼마나 왔는지
+        state.gemItems.push({
+          x: clamp(lerp(prev.x, x, k) + rand(-34, 34), 34, W - 34),
+          y: lerp(prev.y, y, k),
+          taken: false,
+          rot: rand(0, TAU),
+          bob: rand(0, TAU),
+          pop: 0,
+        });
+      }
     }
     while (
       state.planets.length > 24 &&
       (!state.player || state.planets[0].id !== state.player.planetId)
     ) {
       state.planets.shift();
+    }
+    // 화면 아래로 한참 지나간 보석은 정리해요.
+    if (state.gemItems.length > 40) {
+      state.gemItems = state.gemItems.filter((g) => g.y < state.camY + H * 2.2);
     }
   }
 
@@ -379,6 +462,8 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
     state.invuln = 0;
     state.revives = 0;
     state.overT = 0;
+    state.gemItems = [];
+    state.gems = 0;
 
     state.camY = H - 190 - H * CAM_ANCHOR;
     state.camTarget = state.camY;
@@ -453,6 +538,7 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
       bestCombo: state.bestCombo,
       reason: msg,
       revives: state.revives,
+      gems: state.gems,
     });
   }
 
@@ -478,11 +564,35 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
     for (const p of state.planets) {
       p.rot += p.spin * dt;
       if (p.move) p.x = p.baseX + Math.sin((performance.now() / 1000) * p.move.sp + p.move.ph) * p.move.amp;
-      if (p.obstacle) p.obstacle.a += p.obstacle.sp * dt;
+      if (p.obstacle) {
+        p.obstacle.a += p.obstacle.sp * dt;
+        // 공전과 별개로 바위 자체도 천천히 자전해요.
+        p.obstacle.look.rot += p.obstacle.look.spin * dt;
+      }
       if (p.dying) p.alpha -= dt * 1.6;
     }
 
     if (state.invuln > 0) state.invuln = Math.max(0, state.invuln - dt);
+
+    // 보석 — 천천히 돌면서 위아래로 떠다니다가, 가까이 가면 빨려들어와요.
+    for (const g of state.gemItems) {
+      if (g.taken) {
+        g.pop = Math.max(0, g.pop - dt * 2.4);
+        continue;
+      }
+      g.rot += dt * 1.3;
+      g.bob += dt * 2.1;
+      if (state.mode === 'play' && pl) {
+        const d = Math.hypot(pl.x - g.x, pl.y - g.y);
+        if (d < GEM_PICKUP) collectGem(g);
+        else if (d < GEM_PICKUP * 2.6) {
+          // 자석처럼 살짝 끌려와요 — 아슬아슬하게 스치는 맛
+          const k = (1 - d / (GEM_PICKUP * 2.6)) * dt * 5.5;
+          g.x += (pl.x - g.x) * k;
+          g.y += (pl.y - g.y) * k;
+        }
+      }
+    }
 
     if (state.mode === 'play') {
       if (pl.mode === 'orbit') {
@@ -619,6 +729,19 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
     if (state.mode === 'over') state.overT += dt;
   }
 
+  /** 보석 획득 — 개수는 판이 끝날 때 지갑으로 옮겨요. */
+  function collectGem(g) {
+    if (g.taken) return;
+    g.taken = true;
+    g.pop = 1;
+    state.gems++;
+    burst(g.x, g.y, 14, '#8ff3ff', 170, 0.55, 2.6);
+    addRing(g.x, g.y, GEM_R * 0.4, GEM_R * 3.2, '#a8f7ff', 0.5, 2);
+    addPop(g.x, g.y - 18, '+1', '#8ff3ff', 19, 0.9);
+    audio.gem();
+    haptic('tickMedium');
+  }
+
   function land(p, dx, dy, dist) {
     const pl = state.player;
     pl.mode = 'orbit';
@@ -684,7 +807,7 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
       state.banner = {
         text: `${p.info.name} 궤도 진입`,
         sub: `STAGE ${p.stage} · ${p.info.sub}`,
-        warn: p.stage === HAZARD_STAGE ? '⚠ 화면이 계속 올라온다 — 밀려나면 끝' : null,
+        warn: p.stage === HAZARD_STAGE ? '화면이 계속 올라온다 — 밀려나면 끝' : null,
         t: p.stage === HAZARD_STAGE ? 2.8 : 2.0,
       };
       burst(p.x, p.y, 26, p.col.c1, 200, 0.9, 3.5);
@@ -824,29 +947,266 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
     if (p.obstacle) {
       const ox2 = p.x + Math.cos(p.obstacle.a) * p.obstacle.d;
       const oy2 = y + Math.sin(p.obstacle.a) * p.obstacle.d;
-      ctx.globalAlpha = clamp(p.alpha, 0, 1);
-      const og = ctx.createRadialGradient(ox2, oy2, 1, ox2, oy2, p.obstacle.r * 2.2);
-      og.addColorStop(0, 'rgba(255,110,110,.5)');
-      og.addColorStop(1, 'rgba(255,110,110,0)');
-      ctx.fillStyle = og;
-      ctx.beginPath();
-      ctx.arc(ox2, oy2, p.obstacle.r * 2.2, 0, TAU);
-      ctx.fill();
-      ctx.fillStyle = '#ff7a6b';
-      ctx.beginPath();
-      for (let i = 0; i < 7; i++) {
-        const a = (i / 7) * TAU + p.obstacle.a * 2;
-        const rr = p.obstacle.r * (i % 2 ? 0.72 : 1);
-        const fx = ox2 + Math.cos(a) * rr;
-        const fy = oy2 + Math.sin(a) * rr;
-        if (i) ctx.lineTo(fx, fy);
-        else ctx.moveTo(fx, fy);
-      }
-      ctx.closePath();
-      ctx.fill();
+      drawAsteroid(ox2, oy2, p.obstacle, clamp(p.alpha, 0, 1));
     }
 
     ctx.restore();
+  }
+
+  /**
+   * 소행성 — 진짜 운석처럼 보이도록 그려요.
+   *
+   *  1) 옅은 붉은 헤일로로 "닿으면 죽는다"를 먼저 읽히게 하고
+   *  2) 한쪽으로 눌린 울퉁불퉁한 실루엣에 좌상단 광원 기준 명암을 넣고
+   *  3) 크레이터는 그늘 + 광원 반대쪽 안벽의 반사광으로 파인 느낌을 만들어요.
+   *
+   * 바위는 통째로 회전(look.tilt + look.rot)하지만 빛과 그림자는 항상 화면
+   * 좌상단에서 들어와요. 그래야 굴러가는 동안 입체감이 유지돼요.
+   */
+  function drawAsteroid(cx, cy, ob, alpha) {
+    const { r, look } = ob;
+    const { shape, craters, grit, col, squash } = look;
+    const n = shape.length;
+    const ang = look.tilt + look.rot;
+    const cs = Math.cos(ang);
+    const sn = Math.sin(ang);
+
+    /** 바위 기준 좌표 → 화면 좌표 */
+    const toWorld = (lx, ly) => ({ x: cx + lx * cs - ly * sn, y: cy + lx * sn + ly * cs });
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // 1) 위험 헤일로 — 바위 자체는 회색이라, 붉은 빛이 유일한 위험 신호예요
+    const halo = ctx.createRadialGradient(cx, cy, r * 0.8, cx, cy, r * 2.2);
+    halo.addColorStop(0, 'rgba(255,110,80,.32)');
+    halo.addColorStop(0.5, 'rgba(255,88,78,.12)');
+    halo.addColorStop(1, 'rgba(255,88,78,0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 2.2, 0, TAU);
+    ctx.fill();
+
+    // 실루엣 — 꼭짓점 사이를 중점 기준 2차 곡선으로 이어 모서리만 다듬어요
+    const px = (i) => {
+      const k = ((i % n) + n) % n;
+      const a = (k / n) * TAU;
+      const rr = r * shape[k];
+      return toWorld(Math.cos(a) * rr, Math.sin(a) * rr * squash);
+    };
+    const body = () => {
+      const first = px(0);
+      const last = px(n - 1);
+      ctx.beginPath();
+      ctx.moveTo((last.x + first.x) / 2, (last.y + first.y) / 2);
+      for (let i = 0; i < n; i++) {
+        const cur = px(i);
+        const nxt = px(i + 1);
+        ctx.quadraticCurveTo(cur.x, cur.y, (cur.x + nxt.x) / 2, (cur.y + nxt.y) / 2);
+      }
+      ctx.closePath();
+    };
+
+    // 2) 암석 본체 — 좌상단이 밝고 우하단으로 갈수록 어두워요
+    const rock = ctx.createRadialGradient(
+      cx - r * 0.4, cy - r * 0.44, r * 0.08,
+      cx + r * 0.14, cy + r * 0.16, r * 1.1
+    );
+    rock.addColorStop(0, col.hi);
+    rock.addColorStop(0.42, col.mid);
+    rock.addColorStop(1, col.low);
+    ctx.fillStyle = rock;
+    body();
+    ctx.fill();
+
+    // 3) 표면 디테일은 실루엣 안쪽에만
+    ctx.save();
+    body();
+    ctx.clip();
+
+    for (const cr of craters) {
+      const c = toWorld(cr.x * r, cr.y * r * squash);
+      const kr = cr.r * r;
+
+      // 구덩이 그늘
+      ctx.fillStyle = 'rgba(0,0,0,.4)';
+      ctx.beginPath();
+      ctx.ellipse(c.x, c.y, kr, kr * 0.86, ang, 0, TAU);
+      ctx.fill();
+
+      // 빛이 닿는 안벽은 우하단 — 각도는 회전과 무관하게 고정이에요
+      ctx.strokeStyle = 'rgba(255,236,214,.3)';
+      ctx.lineWidth = Math.max(0.55, kr * 0.26);
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, kr * 0.76, -Math.PI * 0.12, Math.PI * 0.72);
+      ctx.stroke();
+
+      // 광원 쪽 테두리는 살짝 도드라져요
+      ctx.strokeStyle = 'rgba(255,255,255,.13)';
+      ctx.lineWidth = Math.max(0.5, kr * 0.16);
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, kr * 1.02, Math.PI * 0.95, Math.PI * 1.75);
+      ctx.stroke();
+    }
+
+    // 잔 알갱이
+    ctx.fillStyle = 'rgba(0,0,0,.22)';
+    for (const s of grit) {
+      const g = toWorld(s.x * r, s.y * r * squash);
+      ctx.beginPath();
+      ctx.arc(g.x, g.y, Math.max(0.4, s.r * r), 0, TAU);
+      ctx.fill();
+    }
+
+    // 광원 쪽 면 하이라이트 + 반대쪽 그림자
+    const lit = ctx.createLinearGradient(cx - r, cy - r, cx + r * 0.4, cy + r * 0.55);
+    lit.addColorStop(0, 'rgba(255,246,236,.22)');
+    lit.addColorStop(0.5, 'rgba(255,246,236,0)');
+    ctx.fillStyle = lit;
+    ctx.fillRect(cx - r * 1.2, cy - r * 1.2, r * 2.4, r * 2.4);
+
+    const dark = ctx.createLinearGradient(cx, cy, cx + r * 0.9, cy + r * 0.9);
+    dark.addColorStop(0, 'rgba(0,0,0,0)');
+    dark.addColorStop(1, 'rgba(0,0,0,.5)');
+    ctx.fillStyle = dark;
+    ctx.fillRect(cx - r * 1.2, cy - r * 1.2, r * 2.4, r * 2.4);
+
+    ctx.restore();
+
+    // 4) 가장자리 — 실루엣 안쪽으로만 칠해서 테두리선처럼 보이지 않게 해요.
+    ctx.save();
+    body();
+    ctx.clip();
+
+    // 배경과 분리해 주는 어두운 외곽
+    ctx.strokeStyle = 'rgba(0,0,0,.5)';
+    ctx.lineWidth = Math.max(0.8, r * 0.1);
+    body();
+    ctx.stroke();
+
+    // 빛을 받는 좌상단 모서리만 밝게 — 반대쪽으로 갈수록 사라져요
+    const rim = ctx.createLinearGradient(cx - r * 0.9, cy - r * 0.9, cx + r * 0.6, cy + r * 0.6);
+    rim.addColorStop(0, 'rgba(255,231,205,.5)');
+    rim.addColorStop(0.5, 'rgba(255,231,205,.06)');
+    rim.addColorStop(1, 'rgba(255,150,110,.16)');
+    ctx.strokeStyle = rim;
+    ctx.lineWidth = Math.max(0.7, r * 0.11);
+    body();
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.restore(); // globalAlpha도 여기서 원래대로 돌아와요
+  }
+
+  /**
+   * 보석 — 각진 크리스털.
+   * 위쪽 관(crown)과 아래쪽 뿔(pavilion)을 나눠 칠하고 면마다 밝기를 달리해서
+   * 이미지 없이도 깎인 보석처럼 보이게 해요.
+   */
+  function drawGem(g) {
+    const y = g.y - state.camY + Math.sin(g.bob) * 3;
+    if (y < -60 || y > H + 60) return;
+    if (g.taken && g.pop <= 0) return;
+
+    ctx.save();
+    // 먹은 직후에는 커지면서 사라져요
+    const k = g.taken ? g.pop : 1;
+    const scale = g.taken ? 1 + (1 - g.pop) * 1.6 : 1;
+    ctx.globalAlpha = k;
+    ctx.translate(g.x, y);
+    ctx.scale(scale, scale);
+
+    const r = GEM_R;
+    const pulse = 0.75 + 0.25 * Math.sin(g.bob * 1.6);
+
+    // 후광
+    const glow = ctx.createRadialGradient(0, 0, r * 0.3, 0, 0, r * 2.6);
+    glow.addColorStop(0, `rgba(140,240,255,${0.34 * pulse})`);
+    glow.addColorStop(1, 'rgba(140,240,255,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 2.6, 0, TAU);
+    ctx.fill();
+
+    // 살짝 좌우로만 돌려서 두께감을 줘요 (완전히 돌리면 납작해 보여요)
+    const w = r * (0.62 + 0.38 * Math.abs(Math.cos(g.rot)));
+
+    const top = -r * 0.72;
+    const mid = -r * 0.2;
+    const bot = r * 1.05;
+
+    // 아래 뿔
+    ctx.fillStyle = '#1b7fa8';
+    ctx.beginPath();
+    ctx.moveTo(-w, mid);
+    ctx.lineTo(0, bot);
+    ctx.lineTo(w, mid);
+    ctx.closePath();
+    ctx.fill();
+    // 뿔 왼쪽 면 (밝게)
+    ctx.fillStyle = '#3fb6dd';
+    ctx.beginPath();
+    ctx.moveTo(-w, mid);
+    ctx.lineTo(0, bot);
+    ctx.lineTo(0, mid);
+    ctx.closePath();
+    ctx.fill();
+
+    // 위 관
+    ctx.fillStyle = '#7fe6ff';
+    ctx.beginPath();
+    ctx.moveTo(-w, mid);
+    ctx.lineTo(-w * 0.55, top);
+    ctx.lineTo(w * 0.55, top);
+    ctx.lineTo(w, mid);
+    ctx.closePath();
+    ctx.fill();
+    // 관 왼쪽 면 (가장 밝게 — 빛 받는 쪽)
+    ctx.fillStyle = '#d5fbff';
+    ctx.beginPath();
+    ctx.moveTo(-w, mid);
+    ctx.lineTo(-w * 0.55, top);
+    ctx.lineTo(0, top);
+    ctx.lineTo(0, mid);
+    ctx.closePath();
+    ctx.fill();
+    // 테이블(윗면)
+    ctx.fillStyle = '#eefeff';
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.55, top);
+    ctx.lineTo(w * 0.55, top);
+    ctx.lineTo(w * 0.34, top + r * 0.2);
+    ctx.lineTo(-w * 0.34, top + r * 0.2);
+    ctx.closePath();
+    ctx.fill();
+
+    // 면 경계선
+    ctx.strokeStyle = 'rgba(255,255,255,.5)';
+    ctx.lineWidth = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(-w, mid);
+    ctx.lineTo(w, mid);
+    ctx.moveTo(0, mid);
+    ctx.lineTo(0, bot);
+    ctx.stroke();
+
+    // 반짝임
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = k * pulse;
+    ctx.strokeStyle = 'rgba(255,255,255,.9)';
+    ctx.lineWidth = 1.1;
+    const sp = r * 0.5 * pulse;
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.42 - sp, top + r * 0.25);
+    ctx.lineTo(-w * 0.42 + sp, top + r * 0.25);
+    ctx.moveTo(-w * 0.42, top + r * 0.25 - sp);
+    ctx.lineTo(-w * 0.42, top + r * 0.25 + sp);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.restore();
+    ctx.globalAlpha = 1;
   }
 
   function drawScrollEdge() {
@@ -976,11 +1336,12 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
       : 10 + Math.sin(t * 22) * 2 + Math.random() * 3;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
+    // 불꽃 색은 스킨이 정해요. (공룡이 파란 제트를 뿜으면 어색하니까)
     const fg = ctx.createLinearGradient(-12, 0, -13 - fl, 0);
-    fg.addColorStop(0, 'rgba(210,245,255,.95)');
-    fg.addColorStop(0.3, 'rgba(90,170,255,.7)');
-    fg.addColorStop(0.7, 'rgba(120,70,255,.35)');
-    fg.addColorStop(1, 'rgba(120,70,255,0)');
+    fg.addColorStop(0, skin.flame.core);
+    fg.addColorStop(0.3, skin.flame.mid);
+    fg.addColorStop(0.7, skin.flame.tail);
+    fg.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = fg;
     ctx.beginPath();
     ctx.moveTo(-11, 5.2);
@@ -997,113 +1358,8 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
     ctx.fill();
     ctx.restore();
 
-    const wg = ctx.createLinearGradient(0, 0, -14, 16);
-    wg.addColorStop(0, '#5f7cc4');
-    wg.addColorStop(1, '#1b2547');
-    for (const s of [1, -1]) {
-      ctx.save();
-      ctx.scale(1, s);
-      ctx.fillStyle = wg;
-      ctx.beginPath();
-      ctx.moveTo(3, 2.6);
-      ctx.lineTo(-8.5, 15.5);
-      ctx.lineTo(-13.5, 15.0);
-      ctx.lineTo(-9, 3.2);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(90,230,255,.85)';
-      ctx.lineWidth = 1.1;
-      ctx.beginPath();
-      ctx.moveTo(3, 2.6);
-      ctx.lineTo(-8.5, 15.5);
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    const blink = 0.45 + 0.55 * Math.abs(Math.sin(t * 4.5));
-    const alphaBase = ctx.globalAlpha;
-    for (const [ly, lc] of [
-      [15.4, '#ff4d78'],
-      [-15.4, '#4dffc3'],
-    ]) {
-      ctx.globalAlpha = alphaBase * blink;
-      const lg = ctx.createRadialGradient(-11, ly, 0.4, -11, ly, 6);
-      lg.addColorStop(0, lc);
-      lg.addColorStop(1, hexA(lc, 0));
-      ctx.fillStyle = lg;
-      ctx.beginPath();
-      ctx.arc(-11, ly, 6, 0, TAU);
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(-11, ly, 1.3, 0, TAU);
-      ctx.fill();
-    }
-    ctx.globalAlpha = alphaBase;
-
-    const hull = () => {
-      ctx.beginPath();
-      ctx.moveTo(20, 0);
-      ctx.bezierCurveTo(13, 3.0, 5, 5.0, -5, 6.1);
-      ctx.lineTo(-11.5, 5.0);
-      ctx.lineTo(-11.5, -5.0);
-      ctx.lineTo(-5, -6.1);
-      ctx.bezierCurveTo(5, -5.0, 13, -3.0, 20, 0);
-      ctx.closePath();
-    };
-    const hg = ctx.createLinearGradient(0, -7, 0, 7);
-    hg.addColorStop(0, '#ffffff');
-    hg.addColorStop(0.34, '#d5e2fb');
-    hg.addColorStop(0.62, '#8496bf');
-    hg.addColorStop(1, '#38446a');
-    ctx.fillStyle = hg;
-    hull();
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.55)';
-    ctx.lineWidth = 0.9;
-    hull();
-    ctx.stroke();
-
-    ctx.save();
-    hull();
-    ctx.clip();
-    ctx.fillStyle = 'rgba(0,0,0,.18)';
-    ctx.fillRect(-12, 1.4, 34, 6);
-    ctx.fillStyle = 'rgba(60,220,255,.9)';
-    ctx.fillRect(-9, -0.7, 22, 1.4);
-    ctx.fillStyle = 'rgba(255,120,60,.75)';
-    ctx.fillRect(-9, 2.8, 9, 1.1);
-    ctx.restore();
-
-    const cg = ctx.createLinearGradient(2, -3.4, 11, 3.4);
-    cg.addColorStop(0, '#07142e');
-    cg.addColorStop(0.45, '#2aa7ff');
-    cg.addColorStop(1, '#d8fbff');
-    ctx.fillStyle = cg;
-    ctx.beginPath();
-    ctx.ellipse(6.4, 0, 6.2, 3.5, 0, 0, TAU);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.7)';
-    ctx.lineWidth = 0.7;
-    ctx.beginPath();
-    ctx.ellipse(6.4, 0, 6.2, 3.5, 0, 0, TAU);
-    ctx.stroke();
-    ctx.globalAlpha = alphaBase * 0.85;
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.ellipse(8.2, -1.1, 2.1, 0.9, -0.25, 0, TAU);
-    ctx.fill();
-    ctx.globalAlpha = alphaBase;
-
-    ctx.fillStyle = '#20263f';
-    ctx.fillRect(-13.2, -4.6, 3.2, 3.2);
-    ctx.fillRect(-13.2, 1.4, 3.2, 3.2);
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = `rgba(120,225,255,${flying ? 0.95 : 0.6})`;
-    ctx.fillRect(-13.0, -4.0, 2.2, 2.0);
-    ctx.fillRect(-13.0, 2.0, 2.2, 2.0);
-    ctx.restore();
+    // 기체는 선택한 스킨이 그려요. (src/skins.js)
+    skin.draw(ctx, t, flying);
 
     ctx.restore();
     ctx.globalAlpha = 1;
@@ -1211,6 +1467,39 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
     y += 22;
     ctx.globalAlpha = 1;
 
+    // 이번 판에서 주운 보석
+    if (state.gems > 0) {
+      ctx.save();
+      ctx.translate(x + 7, y + 4);
+      ctx.scale(0.62, 0.62);
+      // HUD용 미니 보석 (drawGem과 같은 실루엣)
+      ctx.fillStyle = '#7fe6ff';
+      ctx.beginPath();
+      ctx.moveTo(-9, -2);
+      ctx.lineTo(-5, -9);
+      ctx.lineTo(5, -9);
+      ctx.lineTo(9, -2);
+      ctx.lineTo(0, 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#d5fbff';
+      ctx.beginPath();
+      ctx.moveTo(-9, -2);
+      ctx.lineTo(-5, -9);
+      ctx.lineTo(0, -9);
+      ctx.lineTo(0, -2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = '#c9f6ff';
+      ctx.font = 'bold 14px -apple-system, "Noto Sans KR", sans-serif';
+      ctx.fillText(`${state.gems}`, x + 18, y + 9);
+      ctx.globalAlpha = 1;
+      y += 24;
+    }
+
     // 콤보 게이지
     if (state.mode === 'play' && state.combo >= 2) {
       const k = clamp(state.comboT / COMBO_WINDOW, 0, 1);
@@ -1273,6 +1562,35 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
     }
   }
 
+  /** 삼각형 경고 표지 — 반지름 r만큼의 크기로 (cx, cy)에 그려요. */
+  function drawWarnSign(cx, cy, r, color) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = r * 0.34;
+
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.95);
+    ctx.lineTo(r * 0.95, r * 0.75);
+    ctx.lineTo(-r * 0.95, r * 0.75);
+    ctx.closePath();
+    ctx.stroke();
+
+    ctx.lineWidth = r * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.28);
+    ctx.lineTo(0, r * 0.14);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(0, r * 0.44, r * 0.16, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
   function drawBanner() {
     if (!state.banner) return;
     const b = state.banner;
@@ -1295,7 +1613,17 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
       ctx.globalAlpha = a * (0.65 + 0.35 * Math.sin((performance.now() / 1000) * 9));
       ctx.fillStyle = '#ff6b9d';
       ctx.font = 'bold 14px -apple-system, "Noto Sans KR", sans-serif';
-      ctx.fillText(b.warn, W / 2, H * 0.34 + 86);
+
+      // 경고 아이콘도 직접 그려요. (이모지 ⚠는 기기마다 모양·색이 달라요)
+      const wy = H * 0.34 + 86;
+      const iw = 15;
+      const gap = 6;
+      const tw = ctx.measureText(b.warn).width;
+      const left = W / 2 - (tw + iw + gap) / 2;
+      ctx.textAlign = 'left';
+      ctx.fillText(b.warn, left + iw + gap, wy);
+      drawWarnSign(left + iw / 2, wy - 5, iw / 2, '#ff6b9d');
+      ctx.textAlign = 'center';
     }
     ctx.restore();
     ctx.globalAlpha = 1;
@@ -1323,6 +1651,7 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
     }
     drawStars();
     for (const p of state.planets) drawPlanet(p);
+    for (const g of state.gemItems) drawGem(g);
     drawAimGuide();
     drawRings();
     drawPlayer();
@@ -1440,6 +1769,11 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
     setRecords({ best = 0, bestCombo = 0 } = {}) {
       state.best = best;
       state.bestComboEver = bestCombo;
+    },
+
+    /** 장착한 우주선 스킨을 바꿔요. 다음 프레임부터 바로 보여요. */
+    setSkin(id) {
+      skin = getSkin(id);
     },
 
     getRecords() {

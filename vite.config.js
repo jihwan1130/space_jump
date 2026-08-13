@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
@@ -8,6 +9,14 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     assetsInlineLimit: 8192,
+    rollupOptions: {
+      input: {
+        // 게임 본편
+        main: resolve(import.meta.dirname, 'index.html'),
+        // 게임 소개 · 홍보용 페이지 (/introduce.html)
+        introduce: resolve(import.meta.dirname, 'introduce.html'),
+      },
+    },
   },
   server: {
     port: 5173,

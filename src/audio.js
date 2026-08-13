@@ -10,19 +10,55 @@
 
 const BGM_STEP = 0.5; // 8분음표 한 칸 길이(초)
 const LOOKAHEAD = 0.25; // 이만큼 앞의 음을 미리 예약해요
+const BAR = 8; // 한 마디 = 8칸 (4초)
+const LOOP = BAR * 4; // 4마디 한 바퀴 (16초)
+
+/**
+ * 코드 진행 — 자연 단음계의 i · ♭VI · ♭III · ♭VII.
+ * 해결되지 않고 계속 떠 있는 느낌이라 "항해 중"이라는 인상을 줘요.
+ * 숫자는 루트음 기준 반음 거리예요.
+ */
+const PROGRESSION = [
+  { bass: 0, pad: [0, 7, 15], arp: [0, 7, 12, 15, 19] },
+  { bass: -4, pad: [8, 12, 15], arp: [8, 12, 15, 20, 24] },
+  { bass: 3, pad: [3, 10, 19], arp: [3, 10, 15, 19, 22] },
+  { bass: -2, pad: [10, 14, 17], arp: [10, 14, 17, 22, 26] },
+];
+
+/** 아르페지오가 코드 안에서 오르내리는 순서 */
+const ARP_PATH = [0, 2, 1, 3, 2, 4, 3, 1];
+
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 export const audio = {
   ctx: null,
   master: null,
   bgmGain: null,
+  sfxGain: null,
+
+  /** 전체 켬/끔 (설정의 마스터 스위치 대신 음량 0으로도 쓸 수 있어요) */
   enabled: true,
+  /** 효과음만 끄기 */
+  sfxOn: true,
+  /** 배경음만 끄기 */
+  bgmOn: true,
+  /** 마스터 볼륨 0~1 */
+  volume: 0.8,
+
   suspended: false,
+
+  reverb: null,
+  echo: null,
+  /** 배경음이 잔향·에코로 보내는 몫을 따로 끊기 위한 관문 (setBgm이 여닫아요) */
+  bgmToReverb: null,
+  bgmToEcho: null,
 
   _bgmOn: false,
   _timer: null,
   _next: 0,
   _step: 0,
   _root: 220,
+  _bright: 1,
 
   /** 사용자 입력 시점에 호출해요. (자동 재생 정책 회피) */
   init() {
@@ -32,23 +68,176 @@ export const audio = {
       if (!AC) return;
       this.ctx = new AC();
       this.master = this.ctx.createGain();
-      this.master.gain.value = this.enabled ? 1 : 0;
+      this.master.gain.value = this._masterLevel();
       this.master.connect(this.ctx.destination);
+
+      // BGM과 효과음을 따로 끌 수 있게 버스를 나눠요.
       this.bgmGain = this.ctx.createGain();
       this.bgmGain.gain.value = 0.0001;
       this.bgmGain.connect(this.master);
+
+      this.sfxGain = this.ctx.createGain();
+      this.sfxGain.gain.value = this.sfxOn ? 1 : 0;
+      this.sfxGain.connect(this.master);
     } catch {
       this.ctx = null;
+      return;
     }
+    try {
+      this._buildSpace();
+    } catch (e) {
+      // 공간계가 실패해도 마른 소리로는 계속 들려야 해요.
+      console.warn('[space-jump] 잔향·에코를 만들지 못했어요', e);
+      this.reverb = null;
+      this.echo = null;
+    }
+  },
+
+  /**
+   * 공간계 이펙트 — 이 게임 소리가 "우주에 떠 있는" 것처럼 들리게 하는 핵심이에요.
+   *
+   *  - reverb: 잡음으로 만든 임펄스 응답을 쓰는 긴 잔향. 오디오 파일 없이 넓은 공간을 만들어요.
+   *  - echo: 점8분음표 지연의 반복 에코. 음 하나가 저 멀리서 되돌아오는 느낌을 줘요.
+   *
+   * 두 버스 모두 여기(_buildSpace)에서 한 번만 만들고 계속 재사용해요.
+   */
+  _buildSpace() {
+    const ctx = this.ctx;
+
+    // ── 잔향
+    const seconds = 3.2;
+    const len = Math.floor(ctx.sampleRate * seconds);
+    const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const data = ir.getChannelData(ch);
+      for (let i = 0; i < len; i++) {
+        const decay = Math.pow(1 - i / len, 2.6);
+        // 앞머리를 살짝 눌러서 "쨍"하지 않고 서서히 번지게
+        const swell = Math.min(1, i / (ctx.sampleRate * 0.03));
+        data[i] = (Math.random() * 2 - 1) * decay * swell;
+      }
+    }
+    const conv = ctx.createConvolver();
+    conv.buffer = ir;
+    const revTone = ctx.createBiquadFilter();
+    revTone.type = 'lowpass';
+    revTone.frequency.value = 2600;
+    const revGain = ctx.createGain();
+    revGain.gain.value = 0.9;
+    conv.connect(revTone);
+    revTone.connect(revGain);
+    revGain.connect(this.master);
+
+    this.reverb = ctx.createGain(); // 여기로 보내면 잔향이 붙어요
+    this.reverb.gain.value = 1;
+    this.reverb.connect(conv);
+
+    // ── 에코 (점8분음표)
+    const delay = ctx.createDelay(1.5);
+    delay.delayTime.value = BGM_STEP * 0.75;
+    const fb = ctx.createGain();
+    fb.gain.value = 0.34;
+    const echoTone = ctx.createBiquadFilter();
+    echoTone.type = 'lowpass';
+    echoTone.frequency.value = 1800;
+    const echoOut = ctx.createGain();
+    echoOut.gain.value = 0.55;
+
+    delay.connect(echoTone);
+    echoTone.connect(fb);
+    fb.connect(delay); // 되먹임
+    echoTone.connect(echoOut);
+    echoOut.connect(this.master);
+    echoOut.connect(this.reverb); // 되돌아온 소리에도 잔향이 붙어요
+
+    this.echo = ctx.createGain();
+    this.echo.gain.value = 1;
+    this.echo.connect(delay);
+
+    // 배경음 전용 관문.
+    // BGM을 끄면 bgmGain만 내려도 잔향·에코는 공유 버스라 5초쯤 더 울려요.
+    // 그래서 배경음이 보내는 몫만 따로 끊을 수 있게 중간에 문을 하나 둬요.
+    this.bgmToReverb = ctx.createGain();
+    this.bgmToReverb.gain.value = this.bgmOn ? 1 : 0.0001;
+    this.bgmToReverb.connect(this.reverb);
+    this.bgmToEcho = ctx.createGain();
+    this.bgmToEcho.gain.value = this.bgmOn ? 1 : 0.0001;
+    this.bgmToEcho.connect(this.echo);
+  },
+
+  /**
+   * 소리 하나를 공간계 버스로 흘려보내요.
+   * @param {boolean} [viaBgm] 배경음이면 true — BGM을 끌 때 같이 닫히는 문으로 보내요.
+   */
+  _send(node, reverb = 0, echo = 0, viaBgm = false) {
+    const rev = viaBgm ? this.bgmToReverb : this.reverb;
+    const ech = viaBgm ? this.bgmToEcho : this.echo;
+    if (reverb > 0 && rev) {
+      const g = this.ctx.createGain();
+      g.gain.value = reverb;
+      node.connect(g);
+      g.connect(rev);
+    }
+    if (echo > 0 && ech) {
+      const g = this.ctx.createGain();
+      g.gain.value = echo;
+      node.connect(g);
+      g.connect(ech);
+    }
+  },
+
+  /** 마스터 게인에 실제로 넣을 값 */
+  _masterLevel() {
+    return this.enabled ? clamp(this.volume, 0, 1) : 0;
+  },
+
+  _applyMaster(ramp = 0.05) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.master.gain.cancelScheduledValues(t);
+    this.master.gain.setTargetAtTime(this._masterLevel(), t, ramp);
   },
 
   setEnabled(on) {
     this.enabled = on;
+    this._applyMaster();
+    if (on) this.resume();
+  },
+
+  /** 마스터 볼륨 (0~1) */
+  setVolume(v) {
+    this.volume = clamp(Number(v) || 0, 0, 1);
+    this._applyMaster(0.03);
+  },
+
+  /** 효과음만 켜고 꺼요. */
+  setSfx(on) {
+    this.sfxOn = on;
+    if (!this.sfxGain) return;
+    const t = this.ctx.currentTime;
+    this.sfxGain.gain.cancelScheduledValues(t);
+    this.sfxGain.gain.setTargetAtTime(on ? 1 : 0, t, 0.04);
+  },
+
+  /** 배경음만 켜고 꺼요. 끄면 스케줄러까지 멈춰서 CPU도 아껴요. */
+  setBgm(on) {
+    this.bgmOn = on;
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    this.master.gain.cancelScheduledValues(t);
-    this.master.gain.setTargetAtTime(on ? 1 : 0, t, 0.05);
-    if (on) this.resume();
+    if (!on) {
+      this.bgmGain.gain.setTargetAtTime(0.0001, t, 0.12);
+      // 잔향·에코로 가는 길도 같이 닫아요. 안 그러면 끈 뒤에도 한참 울려요.
+      this.bgmToReverb?.gain.setTargetAtTime(0.0001, t, 0.12);
+      this.bgmToEcho?.gain.setTargetAtTime(0.0001, t, 0.12);
+      this._stopScheduler();
+    } else {
+      this.bgmToReverb?.gain.setTargetAtTime(1, t, 0.1);
+      this.bgmToEcho?.gain.setTargetAtTime(1, t, 0.1);
+      if (this._bgmOn) {
+        this.bgmGain.gain.setTargetAtTime(0.5, t, 0.8);
+        this._startScheduler();
+      }
+    }
   },
 
   /** 백그라운드 전환 · 광고 재생 중 — 소리를 즉시 끊어요. */
@@ -71,23 +260,35 @@ export const audio = {
     if (!this.ctx) return;
     try {
       this.ctx.resume?.();
-      const t = this.ctx.currentTime;
-      this.master.gain.cancelScheduledValues(t);
-      this.master.gain.setTargetAtTime(this.enabled ? 1 : 0, t, 0.08);
+      this._applyMaster(0.08);
     } catch {
       /* noop */
     }
-    if (this._bgmOn) this._startScheduler();
+    if (this._bgmOn && this.bgmOn) this._startScheduler();
   },
 
   _canPlay() {
     return Boolean(this.ctx) && this.enabled && !this.suspended;
   },
 
+  /**
+   * 효과음을 만들어도 되는지.
+   *
+   * 효과음은 잔향·에코 버스로도 흘러가는데 그 버스는 master에 바로 붙어 있어요.
+   * 그래서 sfxGain만 0으로 내리면 잔향은 그대로 들려요. 아예 만들지 않는 게 확실해요.
+   */
+  _canSfx() {
+    return this._canPlay() && this.sfxOn;
+  },
+
   /* ───────────────── 효과음 */
 
-  play(freq, dur, type = 'sine', vol = 0.14, slide = 0) {
-    if (!this._canPlay()) return;
+  /**
+   * @param {number} [space] 잔향에 얼마나 보낼지 (0이면 마른 소리)
+   * @param {number} [echo] 에코에 얼마나 보낼지
+   */
+  play(freq, dur, type = 'sine', vol = 0.14, slide = 0, space = 0.22, echo = 0) {
+    if (!this._canSfx()) return;
     const t = this.ctx.currentTime;
     const o = this.ctx.createOscillator();
     const g = this.ctx.createGain();
@@ -97,13 +298,14 @@ export const audio = {
     g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
     o.connect(g);
-    g.connect(this.master);
+    g.connect(this.sfxGain);
+    this._send(g, space, echo);
     o.start(t);
     o.stop(t + dur + 0.02);
   },
 
   noise(dur = 0.12, vol = 0.09, lp = 1200) {
-    if (!this._canPlay()) return;
+    if (!this._canSfx()) return;
     const t = this.ctx.currentTime;
     const len = Math.floor(this.ctx.sampleRate * dur);
     const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
@@ -119,7 +321,7 @@ export const audio = {
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
     src.connect(f);
     f.connect(g);
-    g.connect(this.master);
+    g.connect(this.sfxGain);
     src.start(t);
   },
 
@@ -131,21 +333,22 @@ export const audio = {
   /** 콤보가 쌓일수록 음이 올라가는 펜타토닉 사다리 */
   land(combo = 1, perfect = false) {
     const steps = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
-    const f = 330 * Math.pow(2, steps[Math.min(steps.length - 1, combo - 1)] / 12);
-    this.play(f, 0.17, 'triangle', 0.13, f * 0.2);
-    setTimeout(() => this.play(f * 1.5, 0.13, 'sine', 0.075), 55);
-    if (perfect) setTimeout(() => this.play(f * 2, 0.2, 'sine', 0.085, f * 0.6), 20);
+    const idx = clamp(Math.round(combo) - 1, 0, steps.length - 1);
+    const f = 330 * Math.pow(2, steps[idx] / 12);
+    this.play(f, 0.17, 'triangle', 0.13, f * 0.2, 0.3, 0.16);
+    setTimeout(() => this.play(f * 1.5, 0.13, 'sine', 0.075, 0, 0.3, 0.2), 55);
+    if (perfect) setTimeout(() => this.play(f * 2, 0.2, 'sine', 0.085, f * 0.6, 0.42, 0.3), 20);
   },
 
   praise() {
-    this.play(880, 0.1, 'square', 0.07, 300);
-    setTimeout(() => this.play(1320, 0.16, 'square', 0.06, 260), 80);
+    this.play(880, 0.1, 'square', 0.07, 300, 0.35, 0.3);
+    setTimeout(() => this.play(1320, 0.16, 'square', 0.06, 260, 0.4, 0.34), 80);
   },
 
   stage() {
-    this.play(440, 0.12, 'square', 0.1, 200);
-    setTimeout(() => this.play(660, 0.22, 'square', 0.1, 160), 110);
-    setTimeout(() => this.play(880, 0.3, 'square', 0.09, 200), 230);
+    this.play(440, 0.12, 'square', 0.1, 200, 0.4, 0.2);
+    setTimeout(() => this.play(660, 0.22, 'square', 0.1, 160, 0.45, 0.26), 110);
+    setTimeout(() => this.play(880, 0.3, 'square', 0.09, 200, 0.55, 0.34), 230);
   },
 
   warn() {
@@ -159,22 +362,35 @@ export const audio = {
 
   reward() {
     [0, 4, 7, 12].forEach((s, i) => {
-      setTimeout(() => this.play(440 * Math.pow(2, s / 12), 0.22, 'triangle', 0.1), i * 90);
+      setTimeout(() => this.play(440 * Math.pow(2, s / 12), 0.22, 'triangle', 0.1, 0, 0.5, 0.3), i * 90);
     });
+  },
+
+  /** 보석 획득 — 맑게 올라가는 두 음 + 긴 잔향 */
+  gem() {
+    this.play(1174, 0.1, 'sine', 0.09, 0, 0.5, 0.35);
+    setTimeout(() => this.play(1568, 0.22, 'sine', 0.08, 0, 0.65, 0.45), 60);
+    setTimeout(() => this.play(2349, 0.3, 'sine', 0.04, 0, 0.8, 0.5), 120);
   },
 
   /* ───────────────── 배경음 */
 
-  /** 스테이지가 오르면 조성이 조금씩 올라가요. */
+  /**
+   * 스테이지가 오르면 조성과 음색이 함께 변해요.
+   * 조성은 조금씩 올라가고(긴장), 필터는 서서히 닫혀(어두워져) 깊은 우주로 들어가는 느낌을 줘요.
+   */
   setStage(stage) {
     const semis = [0, 2, 3, 5, 7, 8, 10, 12];
     this._root = 165 * Math.pow(2, semis[(stage - 1) % semis.length] / 12);
+    this._bright = Math.max(0.55, 1 - (stage - 1) * 0.05);
   },
 
   startBgm() {
     this._bgmOn = true;
-    if (!this.ctx) return;
-    this.bgmGain.gain.setTargetAtTime(0.5, this.ctx.currentTime, 0.6);
+    if (!this.ctx || !this.bgmOn) return; // 설정에서 배경음을 껐으면 그대로 둬요
+    this._step = 0;
+    // 우주선이 서서히 항해를 시작하듯 길게 페이드 인
+    this.bgmGain.gain.setTargetAtTime(0.5, this.ctx.currentTime, 1.1);
     this._startScheduler();
   },
 
@@ -199,48 +415,116 @@ export const audio = {
   _tick() {
     if (!this._canPlay() || !this._bgmOn) return;
     while (this._next < this.ctx.currentTime + LOOKAHEAD) {
-      this._scheduleNote(this._next, this._step);
+      this._scheduleStep(this._next, this._step);
       this._next += BGM_STEP;
-      this._step = (this._step + 1) % 16;
+      this._step = (this._step + 1) % LOOP;
     }
   },
 
-  _scheduleNote(time, step) {
-    const root = this._root;
-    // 4마디짜리 아르페지오 — 낮고 잔잔하게
-    const pattern = [0, 7, 12, 7, 3, 10, 15, 10, 0, 7, 12, 16, 5, 12, 17, 12];
-    const semi = pattern[step];
-    const freq = root * Math.pow(2, semi / 12);
+  /** 반음 거리 → 주파수 */
+  _freq(semi) {
+    return this._root * Math.pow(2, semi / 12);
+  },
 
-    const o = this.ctx.createOscillator();
-    const g = this.ctx.createGain();
-    const f = this.ctx.createBiquadFilter();
-    f.type = 'lowpass';
-    f.frequency.value = 1400;
-    o.type = 'triangle';
-    o.frequency.setValueAtTime(freq, time);
-    g.gain.setValueAtTime(0.0001, time);
-    g.gain.exponentialRampToValueAtTime(0.055, time + 0.04);
-    g.gain.exponentialRampToValueAtTime(0.0001, time + BGM_STEP * 1.6);
-    o.connect(f);
-    f.connect(g);
-    g.connect(this.bgmGain);
-    o.start(time);
-    o.stop(time + BGM_STEP * 1.8);
+  /**
+   * 한 칸(8분음표)에 울릴 소리를 예약해요.
+   *
+   * 층은 넷이에요.
+   *   패드   — 마디마다 깔리는 화음. 아주 느리게 열리고 닫혀서 숨 쉬는 것처럼 들려요.
+   *   베이스 — 마디 첫 박의 낮은 사인파. 바닥을 잡아줘요.
+   *   아르페지오 — 코드 음을 오르내리는 짧은 음. 에코를 크게 먹여 멀리 퍼지게 해요.
+   *   별종    — 두 마디에 한 번 나오는 높은 종소리. 지나가는 별 하나 같은 역할이에요.
+   */
+  _scheduleStep(time, step) {
+    const ctx = this.ctx;
+    const bar = Math.floor(step / BAR);
+    const beat = step % BAR;
+    const chord = PROGRESSION[bar % PROGRESSION.length];
 
-    // 마디 첫 박에는 낮은 패드를 깔아요.
-    if (step % 8 === 0) {
-      const p = this.ctx.createOscillator();
-      const pg = this.ctx.createGain();
-      p.type = 'sine';
-      p.frequency.setValueAtTime(root / 2, time);
-      pg.gain.setValueAtTime(0.0001, time);
-      pg.gain.exponentialRampToValueAtTime(0.05, time + 0.5);
-      pg.gain.exponentialRampToValueAtTime(0.0001, time + BGM_STEP * 8);
-      p.connect(pg);
-      pg.connect(this.bgmGain);
-      p.start(time);
-      p.stop(time + BGM_STEP * 8.2);
+    /* ── 마디 머리: 패드 + 베이스 */
+    if (beat === 0) {
+      const barLen = BGM_STEP * BAR;
+
+      for (const semi of chord.pad) {
+        const f = ctx.createBiquadFilter();
+        f.type = 'lowpass';
+        f.frequency.setValueAtTime(420 * this._bright, time);
+        // 마디 안에서 서서히 열렸다가 다시 닫혀요 — 파도처럼 밀려오는 느낌
+        f.frequency.linearRampToValueAtTime(1500 * this._bright, time + barLen * 0.55);
+        f.frequency.linearRampToValueAtTime(500 * this._bright, time + barLen);
+        f.Q.value = 3.2;
+
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, time);
+        g.gain.linearRampToValueAtTime(0.03, time + barLen * 0.42);
+        g.gain.linearRampToValueAtTime(0.0001, time + barLen * 1.05);
+
+        f.connect(g);
+        g.connect(this.bgmGain);
+        this._send(g, 0.85, 0, true);
+
+        // 살짝 어긋난 두 오실레이터 — 넓게 퍼지는 코러스 효과
+        for (const detune of [-7, 7]) {
+          const o = ctx.createOscillator();
+          o.type = 'sawtooth';
+          o.frequency.setValueAtTime(this._freq(semi), time);
+          o.detune.setValueAtTime(detune, time);
+          o.connect(f);
+          o.start(time);
+          o.stop(time + barLen * 1.1);
+        }
+      }
+
+      const bo = ctx.createOscillator();
+      const bg = ctx.createGain();
+      bo.type = 'sine';
+      bo.frequency.setValueAtTime(this._freq(chord.bass) / 2, time);
+      bg.gain.setValueAtTime(0.0001, time);
+      bg.gain.linearRampToValueAtTime(0.075, time + 0.6);
+      bg.gain.exponentialRampToValueAtTime(0.0001, time + barLen);
+      bo.connect(bg);
+      bg.connect(this.bgmGain);
+      this._send(bg, 0.3, 0, true);
+      bo.start(time);
+      bo.stop(time + barLen + 0.1);
+    }
+
+    /* ── 아르페지오 — 쉬는 칸을 둬서 빽빽하지 않게 */
+    if (beat !== 2 && beat !== 6) {
+      const semi = chord.arp[ARP_PATH[beat] % chord.arp.length] + 12;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      const f = ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = 2400 * this._bright;
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(this._freq(semi), time);
+      g.gain.setValueAtTime(0.0001, time);
+      g.gain.exponentialRampToValueAtTime(beat === 0 ? 0.05 : 0.034, time + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, time + BGM_STEP * 1.4);
+      o.connect(f);
+      f.connect(g);
+      g.connect(this.bgmGain);
+      this._send(g, 0.4, 0.5, true);
+      o.start(time);
+      o.stop(time + BGM_STEP * 1.6);
+    }
+
+    /* ── 별종 — 두 마디에 한 번, 높은 곳에서 한 방울 */
+    if (step % (BAR * 2) === BAR + 5) {
+      const semi = chord.arp[chord.arp.length - 1] + 24;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(this._freq(semi), time);
+      g.gain.setValueAtTime(0.0001, time);
+      g.gain.exponentialRampToValueAtTime(0.03, time + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, time + 2.4);
+      o.connect(g);
+      g.connect(this.bgmGain);
+      this._send(g, 0.9, 0.6, true);
+      o.start(time);
+      o.stop(time + 2.6);
     }
   },
 };

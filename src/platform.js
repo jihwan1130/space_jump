@@ -260,40 +260,83 @@ export function onVisibility(onHide, onShow) {
  * 정책상 광고는 반드시 **미리 로드**해 두고, 사용자가 직접 누른 순간에만 보여줘야 해요.
  * 보상은 `userEarnedReward` 이벤트에서만 지급해요.
  */
+/**
+ * 로컬 개발(브라우저)에서는 SDK가 없어 광고를 띄울 수 없어요.
+ * 그래서 개발 빌드에 한해 가짜 광고로 대체해 이어하기 흐름을 그대로 눌러볼 수 있게 해요.
+ * 프로덕션 번들에서는 항상 false라 실제 SDK만 타요.
+ */
+const MOCK_AD = !isInToss && Boolean(import.meta.env?.DEV);
+
 export const rewardAd = {
   loaded: false,
   loading: false,
   _unload: null,
+  _waiters: [],
 
   get available() {
+    if (MOCK_AD) return true;
     if (!isInToss) return false;
     return supported(loadFullScreenAd) && supported(showFullScreenAd);
+  },
+
+  /** 로드가 끝났다고 알려요. 기다리던 쪽(waitLoad)을 전부 깨워요. */
+  _settle(ok) {
+    this.loaded = ok;
+    this.loading = false;
+    const waiters = this._waiters;
+    this._waiters = [];
+    for (const w of waiters) w(ok);
   },
 
   /** 광고를 미리 불러와 둬요. (게임 시작 시 · 광고를 닫은 직후 호출) */
   preload() {
     if (!this.available || this.loaded || this.loading) return;
     this.loading = true;
+
+    if (MOCK_AD) {
+      setTimeout(() => this._settle(true), 300);
+      return;
+    }
+
     try {
       this._unload?.();
       this._unload = loadFullScreenAd({
         options: { adGroupId: REWARD_AD_GROUP_ID },
         onEvent: (event) => {
-          if (event?.type === 'loaded') {
-            this.loaded = true;
-            this.loading = false;
-          }
+          if (event?.type === 'loaded') this._settle(true);
         },
         onError: (error) => {
           console.warn('[space-jump] 광고 로드 실패', error);
-          this.loaded = false;
-          this.loading = false;
+          this._settle(false);
         },
       });
     } catch (e) {
       console.warn('[space-jump] 광고 로드 호출 실패', e);
-      this.loading = false;
+      this._settle(false);
     }
+  },
+
+  /**
+   * 진행 중인 로드가 끝날 때까지 최대 `ms`만큼 기다려요.
+   * 게임 오버 화면에서 사용자가 이어하기를 눌렀는데 아직 로드가 안 끝났을 때만 써요.
+   * @returns {Promise<boolean>} 광고를 띄울 수 있는 상태인지
+   */
+  waitLoad(ms = 4000) {
+    if (this.loaded) return Promise.resolve(true);
+    if (!this.available) return Promise.resolve(false);
+    this.preload();
+    if (!this.loading) return Promise.resolve(this.loaded);
+
+    return new Promise((resolve) => {
+      let done = false;
+      const settle = (ok) => {
+        if (done) return;
+        done = true;
+        resolve(ok);
+      };
+      this._waiters.push(settle);
+      setTimeout(() => settle(this.loaded), ms);
+    });
   },
 
   /**
@@ -305,6 +348,18 @@ export const rewardAd = {
       onClose?.(false);
       return;
     }
+
+    if (MOCK_AD) {
+      this.loaded = false;
+      onOpen?.();
+      setTimeout(() => {
+        onReward?.();
+        onClose?.(true);
+        setTimeout(() => this.preload(), 400);
+      }, 900);
+      return;
+    }
+
     let rewarded = false;
     let finished = false;
     const finish = () => {

@@ -73,6 +73,45 @@ html, body {
   animation: pop-in 0.26s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 .panel-sm { max-width: 300px; }
+.panel-wide {
+  max-width: 380px;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── 보석 지갑 표시 ──────────────────────────── */
+/* 보석 아이콘도 이모지가 아니라 clip-path로 깎은 도형이에요. */
+.wallet {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px 4px 8px;
+  border-radius: 999px;
+  background: rgba(127, 230, 255, 0.14);
+  color: #a8f0ff;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.wallet::before {
+  content: '';
+  width: 12px;
+  height: 13px;
+  background: linear-gradient(160deg, #eefeff 0%, #7fe6ff 45%, #1b7fa8 100%);
+  clip-path: polygon(28% 0, 72% 0, 100% 34%, 50% 100%, 0 34%);
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 13px;
+}
+.who b { font-weight: 700; color: rgba(255, 255, 255, 0.9); }
 
 /* ── 타이틀 ─────────────────────────────────── */
 .logo {
@@ -159,6 +198,19 @@ html, body {
   color: rgba(255, 255, 255, 0.42);
 }
 
+/* 신기록 표시 — 이모지 대신 CSS로 그린 반짝임을 앞에 붙여요. */
+.over-best.is-new { color: #ffd166; font-weight: 700; }
+.over-best.is-new::before {
+  content: '';
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 5px;
+  vertical-align: -1px;
+  background: currentColor;
+  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+}
+
 /* ── 공통 패널 ───────────────────────────────── */
 .panel-title { font-size: 20px; font-weight: 700; }
 .panel-desc {
@@ -188,6 +240,53 @@ html, body {
 .btn:disabled { opacity: 0.45; cursor: default; }
 
 .btn-primary { background: #3182f6; }
+
+/* 타이틀의 상점 · 랭킹 두 칸 */
+.menu-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+.btn-tile {
+  flex: 1;
+  margin-top: 0;
+  padding: 14px 8px 12px;
+  background: rgba(255, 255, 255, 0.08);
+  text-align: center;
+}
+.tile-ico {
+  display: block;
+  margin: 0 auto 6px;
+  width: 26px;
+  height: 26px;
+  color: #5fd0ff;
+}
+.tile-ico svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tile-label { display: block; font-size: 14px; font-weight: 700; }
+.tile-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.btn-inline {
+  width: auto;
+  margin-top: 0;
+  flex: 0 0 auto;
+  padding: 12px 16px;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.14);
+}
 .btn-reward { background: linear-gradient(135deg, #7b3ff2, #b44bf0); }
 .btn-reward em { font-style: normal; font-weight: 500; opacity: 0.8; font-size: 13px; }
 .btn-ghost { background: rgba(255, 255, 255, 0.1); }
@@ -204,19 +303,306 @@ html, body {
   position: absolute;
   left: calc(var(--sa-left) + 14px);
   bottom: calc(var(--sa-bottom) + 14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 42px;
   height: 42px;
   border: 0;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
-  font-size: 17px;
   line-height: 1;
   cursor: pointer;
   transition: transform 0.1s ease;
 }
 .icon-btn:active { transform: scale(0.92); }
 .icon-btn.is-off { opacity: 0.45; }
+
+/* 직접 그린 아이콘 — 채움(스피커 몸통) + 선(음파 / 소거 표시) */
+.ico {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+.ico .ico-fill { fill: currentColor; }
+.ico g {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+}
+.icon-btn .ico-off { display: none; }
+.icon-btn.is-off .ico-on { display: none; }
+.icon-btn.is-off .ico-off { display: block; }
+
+/* ── 시트 공통 (상점 · 랭킹 · 설정) ──────────── */
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.sheet-head .panel-title { text-align: left; }
+
+/* ── 상점 ───────────────────────────────────── */
+.shop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0 20px;
+}
+.shop-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  text-align: left;
+}
+.shop-item.is-equipped {
+  border-color: rgba(95, 208, 255, 0.55);
+  background: rgba(95, 208, 255, 0.1);
+}
+.shop-item canvas {
+  flex: 0 0 auto;
+  width: 54px;
+  height: 54px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+}
+.shop-info { flex: 1; min-width: 0; }
+.shop-name { font-size: 14px; font-weight: 700; }
+.shop-desc {
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.5);
+}
+.shop-kind {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+.shop-kind.cool { background: rgba(95, 208, 255, 0.16); color: #7fd9ff; }
+.shop-kind.fun { background: rgba(255, 209, 102, 0.16); color: #ffd166; }
+
+.shop-action {
+  flex: 0 0 auto;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+  background: #3182f6;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.shop-action:active { transform: scale(0.96); }
+.shop-action.is-owned { background: rgba(255, 255, 255, 0.14); }
+.shop-action.is-on {
+  background: none;
+  color: #5fd0ff;
+  font-size: 12px;
+  cursor: default;
+}
+.shop-action:disabled { opacity: 0.4; cursor: default; }
+.shop-action .cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.shop-action .cost::before {
+  content: '';
+  width: 10px;
+  height: 11px;
+  background: #d5fbff;
+  clip-path: polygon(28% 0, 72% 0, 100% 34%, 50% 100%, 0 34%);
+}
+
+/* ── 랭킹 ───────────────────────────────────── */
+.rank-mine { font-size: 12px; color: #5fd0ff; font-weight: 700; }
+.rank-list {
+  margin: 14px 0 18px;
+  max-height: 46vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.rank-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+}
+.rank-row:last-child { border-bottom: 0; }
+.rank-row.is-me {
+  background: rgba(95, 208, 255, 0.1);
+  border-radius: 10px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.rank-no {
+  flex: 0 0 26px;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: right;
+}
+.rank-row.top-1 .rank-no { color: #ffd166; }
+.rank-row.top-2 .rank-no { color: #d6dbe6; }
+.rank-row.top-3 .rank-no { color: #e0a071; }
+.rank-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rank-score { font-weight: 700; font-variant-numeric: tabular-nums; }
+.rank-empty {
+  padding: 26px 0;
+  text-align: center;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.6;
+}
+
+/* ── 설정 ───────────────────────────────────── */
+.field {
+  margin: 18px 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  text-align: left;
+}
+.field:last-of-type { border-bottom: 0; }
+.field-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.55);
+}
+.field-label b { color: #5fd0ff; }
+.field-row { display: flex; gap: 8px; }
+.field-msg {
+  margin-top: 8px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.42);
+}
+.field-msg.is-error { color: #ff8fa8; }
+.field-msg.is-ok { color: #7dffb0; }
+
+.input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+}
+.input:focus {
+  outline: none;
+  border-color: #3182f6;
+  background: rgba(49, 130, 246, 0.1);
+}
+
+/* 토글 스위치 — checkbox를 감추고 직접 그린 트랙/노브를 써요 */
+.switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 0;
+  font-size: 14px;
+  cursor: pointer;
+}
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.switch .track {
+  position: relative;
+  width: 46px;
+  height: 27px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  transition: background 0.18s ease;
+  flex: 0 0 auto;
+}
+.switch .knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.18s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.switch input:checked + .track { background: #3182f6; }
+.switch input:checked + .track .knob { transform: translateX(19px); }
+.switch input:focus-visible + .track { box-shadow: 0 0 0 2px rgba(95, 208, 255, 0.6); }
+
+/* 볼륨 슬라이더 */
+.range {
+  width: 100%;
+  height: 26px;
+  background: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+.range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -7px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+.range::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+.range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+}
+
+/* ── 게임 오버: 보석 획득 ────────────────────── */
+.over-gems {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #a8f0ff;
+}
+.over-gems b { font-weight: 800; }
 
 /* ── 토스트 ─────────────────────────────────── */
 .toast {

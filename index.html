@@ -14,9 +14,13 @@
   <!-- 게임 위에 얹히는 UI. 게임 중에는 포인터 이벤트를 통과시켜요. -->
   <div id="ui" class="ui">
 
-    <!-- 사운드 토글: 프레임워크 X 버튼(우측 상단)과 겹치지 않게 좌측 하단에 둬요 -->
-    <button id="btn-sound" class="icon-btn" type="button" aria-label="소리 끄기">
-      <span id="ico-sound" aria-hidden="true">🔊</span>
+    <!-- 설정(톱니바퀴): 프레임워크 X 버튼(우측 상단)과 겹치지 않게 좌측 하단에 둬요 -->
+    <!-- 아이콘은 시스템 이모지 대신 직접 그린 SVG라 기기·OS가 달라도 똑같이 보여요. -->
+    <button id="btn-settings" class="icon-btn" type="button" aria-label="설정 열기">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path class="ico-fill" d="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8zm0 1.9a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z" />
+        <path class="ico-fill" d="M10.9 2.4h2.2l.35 2.1c.5.16.97.38 1.4.66l1.85-1.1 1.55 1.55-1.1 1.85c.28.43.5.9.66 1.4l2.1.35v2.2l-2.1.35a6.6 6.6 0 0 1-.66 1.4l1.1 1.85-1.55 1.55-1.85-1.1c-.43.28-.9.5-1.4.66l-.35 2.1h-2.2l-.35-2.1a6.6 6.6 0 0 1-1.4-.66l-1.85 1.1-1.55-1.55 1.1-1.85a6.6 6.6 0 0 1-.66-1.4l-2.1-.35v-2.2l2.1-.35c.16-.5.38-.97.66-1.4l-1.1-1.85 1.55-1.55 1.85 1.1c.43-.28.9-.5 1.4-.66zM12 6.7a5.3 5.3 0 1 0 0 10.6 5.3 5.3 0 0 0 0-10.6z" />
+      </svg>
     </button>
 
     <!-- 타이틀 -->
@@ -24,6 +28,8 @@
       <div class="panel">
         <h1 class="logo">SPACE<span>JUMP</span></h1>
         <p class="tagline">지구에서 출발해 우주 끝까지</p>
+
+        <p class="who"><b id="title-nick">우주미아0000</b><span id="title-wallet" class="wallet">0</span></p>
 
         <div class="record">
           <div><span class="record-label">최고 기록</span><b id="title-best">0</b></div>
@@ -33,11 +39,29 @@
         <ul class="howto">
           <li>화면을 <b>탭</b>하면 우주선이 향한 방향 그대로 발사돼요.</li>
           <li>다음 행성의 <b>점선 궤도</b> 안에 들어가면 착지해요.</li>
+          <li>길목의 <b>보석</b>을 주우면 판이 끝날 때 지갑에 들어와요.</li>
           <li>목성(스테이지 4)부터 <b>화면이 저절로 올라와요.</b> 아래로 밀려나면 끝이에요.</li>
         </ul>
 
         <button id="btn-start" class="btn btn-primary" type="button">게임 시작하기</button>
-        <button id="btn-rank-title" class="btn btn-ghost is-hidden" type="button">랭킹 보러 가기</button>
+
+        <!-- 상점 · 랭킹 대시보드 -->
+        <div class="menu-row">
+          <button id="btn-shop" class="btn btn-tile" type="button">
+            <span class="tile-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4.5 8.5h15l-1.3 10a1.6 1.6 0 0 1-1.6 1.4H7.4a1.6 1.6 0 0 1-1.6-1.4zM8.6 8.5a3.4 3.4 0 0 1 6.8 0" /></svg>
+            </span>
+            <span class="tile-label">상점</span>
+            <span class="tile-sub">우주선 스킨</span>
+          </button>
+          <button id="btn-rank" class="btn btn-tile" type="button">
+            <span class="tile-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4.6 20V12.4M12 20V4.6M19.4 20v-5.2" /></svg>
+            </span>
+            <span class="tile-label">랭킹</span>
+            <span class="tile-sub" id="rank-sub">순위 보기</span>
+          </button>
+        </div>
       </div>
     </section>
 
@@ -47,6 +71,7 @@
         <p id="over-reason" class="over-reason">추락</p>
         <div class="over-score"><b id="over-score">0</b><span>점</span></div>
         <p id="over-detail" class="over-detail">도달: 지구 · STAGE 1</p>
+        <p id="over-gems" class="over-gems is-hidden">보석 <b>0</b>개 획득</p>
         <p id="over-best" class="over-best">최고 기록 0</p>
 
         <button id="btn-revive" class="btn btn-reward is-hidden" type="button">
@@ -74,6 +99,79 @@
         <p class="panel-desc">진행 중인 판은 저장되지 않아요.</p>
         <button id="btn-exit-cancel" class="btn btn-primary" type="button">계속하기</button>
         <button id="btn-exit-confirm" class="btn btn-quiet" type="button">종료하기</button>
+      </div>
+    </section>
+
+    <!-- ── 상점 ─────────────────────────────── -->
+    <section id="screen-shop" class="screen is-hidden">
+      <div class="panel panel-wide">
+        <div class="sheet-head">
+          <h2 class="panel-title">상점</h2>
+          <span class="wallet" id="shop-wallet">0</span>
+        </div>
+        <p class="panel-desc">보석을 모아 우주선을 바꿔보세요. 성능 차이는 없어요, 순전히 취향이에요.</p>
+        <div id="shop-list" class="shop-list"></div>
+        <button id="btn-shop-close" class="btn btn-primary" type="button">닫기</button>
+      </div>
+    </section>
+
+    <!-- ── 랭킹 대시보드 ────────────────────── -->
+    <section id="screen-rank" class="screen is-hidden">
+      <div class="panel panel-wide">
+        <div class="sheet-head">
+          <h2 class="panel-title">랭킹</h2>
+          <span id="rank-mine" class="rank-mine"></span>
+        </div>
+        <div id="rank-list" class="rank-list"></div>
+        <button id="btn-rank-toss" class="btn btn-ghost is-hidden" type="button">토스 게임센터 랭킹</button>
+        <button id="btn-rank-close" class="btn btn-primary" type="button">닫기</button>
+      </div>
+    </section>
+
+    <!-- ── 설정 ─────────────────────────────── -->
+    <section id="screen-settings" class="screen is-hidden">
+      <div class="panel panel-wide">
+        <h2 class="panel-title">설정</h2>
+
+        <div class="field">
+          <label class="field-label" for="input-nick">닉네임</label>
+          <div class="field-row">
+            <input id="input-nick" class="input" type="text" maxlength="12"
+                   autocomplete="off" autocapitalize="off" spellcheck="false"
+                   placeholder="우주미아0000" />
+            <button id="btn-nick-save" class="btn btn-inline" type="button">저장</button>
+          </div>
+          <p id="nick-msg" class="field-msg">한글·영문·숫자 2~12글자. 랭킹에 이 이름으로 올라가요.</p>
+        </div>
+
+        <div class="field">
+          <span class="field-label">소리</span>
+          <label class="switch">
+            <span>효과음</span>
+            <input id="sw-sfx" type="checkbox" checked />
+            <span class="track" aria-hidden="true"><span class="knob"></span></span>
+          </label>
+          <label class="switch">
+            <span>배경음</span>
+            <input id="sw-bgm" type="checkbox" checked />
+            <span class="track" aria-hidden="true"><span class="knob"></span></span>
+          </label>
+          <label class="switch">
+            <span>진동</span>
+            <input id="sw-haptic" type="checkbox" checked />
+            <span class="track" aria-hidden="true"><span class="knob"></span></span>
+          </label>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="range-vol">
+            전체 볼륨 <b id="vol-value">80%</b>
+          </label>
+          <input id="range-vol" class="range" type="range" min="0" max="100" step="5" value="80" />
+        </div>
+
+        <p id="sync-msg" class="field-msg"></p>
+        <button id="btn-settings-close" class="btn btn-primary" type="button">닫기</button>
       </div>
     </section>
 
