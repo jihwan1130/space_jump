@@ -594,6 +594,16 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
       }
     }
 
+    // 홈 화면에서도 우주선은 계속 공전해요. 정지 화면처럼 보이지 않게요.
+    // (죽음 판정 · 화면 상승은 아래 play 블록에서만 돌아가요)
+    if (state.mode === 'title' && pl && pl.mode === 'orbit') {
+      const p = planetById(pl.planetId);
+      if (p) {
+        pl.angle += Math.abs(p.spin) * ORBIT_SPIN * dt * pl.dir;
+        syncOrbitPos();
+      }
+    }
+
     if (state.mode === 'play') {
       if (pl.mode === 'orbit') {
         const p = planetById(pl.planetId);
@@ -1785,6 +1795,14 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
       state.mode = 'play';
       state.paused = false;
       audio.startBgm();
+    },
+
+    /** 홈으로 — 판을 접고 배경을 처음 상태로 되돌려요. */
+    home() {
+      reset();
+      state.mode = 'title';
+      state.paused = false;
+      audio.stopBgm();
     },
 
     revive,

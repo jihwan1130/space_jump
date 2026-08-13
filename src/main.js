@@ -40,7 +40,7 @@ const $ = (id) => document.getElementById(id);
 
 const el = {
   canvas: $('game'),
-  screenTitle: $('screen-title'),
+  home: $('home'),
   screenOver: $('screen-over'),
   screenPause: $('screen-pause'),
   screenExit: $('screen-exit'),
@@ -49,14 +49,13 @@ const el = {
   screenSettings: $('screen-settings'),
   toast: $('toast'),
 
-  titleBest: $('title-best'),
-  titleBestCombo: $('title-best-combo'),
-  titleNick: $('title-nick'),
-  titleWallet: $('title-wallet'),
-  btnStart: $('btn-start'),
+  homeBest: $('home-best'),
+  homeCombo: $('home-combo'),
+  homeNick: $('home-nick'),
+  homeWallet: $('home-wallet'),
+  btnPause: $('btn-pause'),
   btnShop: $('btn-shop'),
   btnRank: $('btn-rank'),
-  rankSub: $('rank-sub'),
 
   overReason: $('over-reason'),
   overScore: $('over-score'),
@@ -64,10 +63,8 @@ const el = {
   overGems: $('over-gems'),
   overBest: $('over-best'),
   btnRevive: $('btn-revive'),
-  reviveCount: $('revive-count'),
   btnRetry: $('btn-retry'),
-  btnRankOver: $('btn-rank-over'),
-  btnQuit: $('btn-quit'),
+  btnHomeOver: $('btn-home-over'),
 
   shopWallet: $('shop-wallet'),
   shopList: $('shop-list'),
@@ -90,6 +87,7 @@ const el = {
   btnSettingsClose: $('btn-settings-close'),
 
   btnResume: $('btn-resume'),
+  btnHomePause: $('btn-home-pause'),
   btnExitCancel: $('btn-exit-cancel'),
   btnExitConfirm: $('btn-exit-confirm'),
 
@@ -199,16 +197,30 @@ function markDirty() {
 
 function renderWallet() {
   const text = String(records.gems);
-  el.titleWallet.textContent = text;
+  el.homeWallet.textContent = text;
   el.shopWallet.textContent = text;
 }
 
-function renderTitle() {
-  el.titleBest.textContent = String(records.best);
-  el.titleBestCombo.textContent = `x${records.bestCombo}`;
-  el.titleNick.textContent = records.nickname || defaultNickname(userKey);
+/** 홈 화면 값 갱신. 게임 화면 위에 그대로 얹히는 레이어예요. */
+function renderHome() {
+  el.homeBest.textContent = String(records.best);
+  el.homeCombo.textContent = `x${records.bestCombo}`;
+  el.homeNick.textContent = records.nickname || defaultNickname(userKey);
   renderWallet();
-  show(el.screenTitle);
+  show(el.home);
+  hide(el.btnPause);
+}
+
+/**
+ * 홈으로 돌아가요. 게임을 접고 배경을 처음 상태로 되돌려요.
+ * (일시정지 화면 · 게임 오버 화면 어디서든 부를 수 있어요)
+ */
+function goHome() {
+  hide(el.screenOver);
+  hide(el.screenPause);
+  hide(el.screenExit);
+  game.home();
+  renderHome();
 }
 
 function showGameOver(result) {
@@ -239,11 +251,10 @@ function showGameOver(result) {
   // (로드 완료만 조건으로 걸면 네트워크가 느릴 때 기회가 조용히 사라져요.)
   const canRevive = rewardAd.available && result.revives < MAX_REVIVES;
   el.btnRevive.classList.toggle('is-hidden', !canRevive);
-  el.reviveCount.textContent = `(${MAX_REVIVES - result.revives}회 남음)`;
   el.btnRevive.disabled = false;
   if (canRevive) rewardAd.preload();
 
-  el.btnRankOver.classList.remove('is-hidden');
+  hide(el.btnPause);
   show(el.screenOver);
 
   // 기록 저장 + 제출은 판이 끝난 뒤에만
@@ -256,9 +267,10 @@ function showGameOver(result) {
 function startGame() {
   audio.init();
   applyAudioSettings();
-  hide(el.screenTitle);
+  hide(el.home);
   hide(el.screenOver);
   hide(el.screenPause);
+  show(el.btnPause);
   records.plays += 1;
   game.setRecords(records);
   game.setSkin(records.equippedSkin);
@@ -500,7 +512,7 @@ async function saveNickname() {
     records.nickname = next;
     await persist();
     el.btnNickSave.disabled = false;
-    el.titleNick.textContent = next;
+    el.homeNick.textContent = next;
     setNickMsg('저장했어요. (이 기기에만 저장돼요)', 'ok');
     return;
   }
@@ -527,7 +539,7 @@ async function saveNickname() {
 
   records.nickname = next;
   await persist();
-  el.titleNick.textContent = next;
+  el.homeNick.textContent = next;
   setNickMsg(
     result === 'ok' ? '저장했어요.' : '저장했어요. (서버 반영은 나중에 다시 시도해요)',
     'ok'
@@ -542,7 +554,7 @@ let sheetReturn = null;
 
 function openSheet(node, onOpen) {
   sheetReturn =
-    [el.screenOver, el.screenTitle, el.screenPause].find((s) => !s.classList.contains('is-hidden')) ||
+    [el.screenOver, el.home, el.screenPause].find((s) => !s.classList.contains('is-hidden')) ||
     null;
   if (sheetReturn) hide(sheetReturn);
   onOpen?.();
@@ -566,7 +578,11 @@ function anySheetOpen() {
 
 /* ────────────────────────────── 버튼 */
 
-el.btnStart.addEventListener('click', () => {
+/**
+ * 홈 아무 데나 탭하면 시작해요.
+ * 우측 모양 버튼은 자기 핸들러에서 stopPropagation 해서 여기까지 안 와요.
+ */
+el.home.addEventListener('click', () => {
   haptic('tap');
   startGame();
 });
@@ -576,7 +592,8 @@ el.btnRetry.addEventListener('click', () => {
   startGame();
 });
 
-el.btnShop.addEventListener('click', () => {
+el.btnShop.addEventListener('click', (e) => {
+  e.stopPropagation();
   haptic('tap');
   audio.init();
   openSheet(el.screenShop, renderShop);
@@ -587,14 +604,29 @@ el.btnShopClose.addEventListener('click', () => {
   closeSheet(el.screenShop);
 });
 
-el.btnRank.addEventListener('click', () => {
+el.btnRank.addEventListener('click', (e) => {
+  e.stopPropagation();
   haptic('tap');
   openSheet(el.screenRank, renderRank);
 });
 
-el.btnRankOver.addEventListener('click', () => {
+el.btnHomeOver.addEventListener('click', () => {
   haptic('tap');
-  openSheet(el.screenRank, renderRank);
+  goHome();
+});
+
+el.btnHomePause.addEventListener('click', () => {
+  haptic('tap');
+  goHome();
+});
+
+/** 게임 중 일시정지 */
+el.btnPause.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!game.isPlaying || game.state.paused) return;
+  haptic('tap');
+  game.pause();
+  show(el.screenPause);
 });
 
 el.btnRankClose.addEventListener('click', () => {
@@ -607,7 +639,8 @@ el.btnRankToss.addEventListener('click', () => {
   leaderboard.open();
 });
 
-el.btnSettings.addEventListener('click', () => {
+el.btnSettings.addEventListener('click', (e) => {
+  e.stopPropagation();
   haptic('tap');
   audio.init();
   const open = anySheetOpen();
@@ -712,6 +745,7 @@ el.btnRevive.addEventListener('click', async () => {
         // (이미 지갑에 넣었으니 판이 끝날 때 중복으로 더하지 않도록 초기화해요)
         game.state.gems = 0;
         hide(el.overGems);
+        show(el.btnPause);
         game.resume();
         game.revive();
       } else {
@@ -730,7 +764,7 @@ let exitReturnScreen = null;
 function openExitModal() {
   if (!el.screenExit.classList.contains('is-hidden')) return;
   exitReturnScreen =
-    [el.screenOver, el.screenTitle, el.screenPause].find(
+    [el.screenOver, el.home, el.screenPause].find(
       (s) => !s.classList.contains('is-hidden')
     ) || null;
   if (exitReturnScreen) hide(exitReturnScreen);
@@ -749,14 +783,10 @@ function closeExitModal() {
   }
 }
 
-el.btnQuit.addEventListener('click', () => {
-  haptic('tap');
-  openExitModal();
-});
-
 el.btnResume.addEventListener('click', () => {
   haptic('tap');
   hide(el.screenPause);
+  if (game.isPlaying) show(el.btnPause);
   audio.init();
   game.resume();
 });
@@ -925,7 +955,7 @@ async function boot() {
 
   game.setRecords(records);
   game.setSkin(records.equippedSkin);
-  renderTitle();
+  renderHome();
 
   // 광고는 미리 받아둬요. (보여줄 때 로딩하지 않기 — 정책 필수)
   rewardAd.preload();
@@ -936,18 +966,12 @@ async function boot() {
     await ensureNickname();
     game.setRecords(records);
     game.setSkin(records.equippedSkin);
-    renderTitle();
+    renderHome();
     await store.save(localSnapshot());
     pushCloud();
   } else {
     await ensureNickname();
-    renderTitle();
-  }
-
-  // 랭킹 버튼에 내 순위를 살짝 미리 보여줘요.
-  if (records.best > 0) {
-    const rank = await cloud.myRank(records.best);
-    if (rank) el.rankSub.textContent = `내 순위 ${rank}위`;
+    renderHome();
   }
 }
 
@@ -961,6 +985,7 @@ if (import.meta.env.DEV) {
     cloud,
     showGameOver,
     startGame,
+    goHome,
     renderShop,
     renderRank,
     records: () => records,

@@ -40,7 +40,8 @@ html, body {
   z-index: 10;
 }
 .ui .screen,
-.ui .icon-btn,
+.ui .home,
+.ui .shape-btn,
 .ui .toast { pointer-events: auto; }
 
 .is-hidden { display: none !important; }
@@ -81,6 +82,20 @@ html, body {
   -webkit-overflow-scrolling: touch;
 }
 
+/*
+  스크롤바는 감추고 드래그(터치 스와이프)로만 움직이게 해요.
+  막대가 보이면 게임 화면 위에 웹페이지가 얹힌 것처럼 보여요.
+*/
+.no-bar {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* 구형 Edge */
+}
+.no-bar::-webkit-scrollbar {    /* Chrome · Safari · 토스 웹뷰 */
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 /* ── 보석 지갑 표시 ──────────────────────────── */
 /* 보석 아이콘도 이모지가 아니라 clip-path로 깎은 도형이에요. */
 .wallet {
@@ -103,74 +118,140 @@ html, body {
   clip-path: polygon(28% 0, 72% 0, 100% 34%, 50% 100%, 0 34%);
 }
 
-.who {
+/* ── 홈 (별도 시작 화면 없이 게임 화면 위에 얹혀요) ──── */
+.home {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;   /* 아무 데나 탭하면 시작돼요 */
+  padding:
+    calc(var(--sa-top) + 12px) calc(var(--sa-right) + 16px)
+    calc(var(--sa-bottom) + 16px) calc(var(--sa-left) + 16px);
+  animation: fade-in 0.25s ease-out;
+  /* 패널처럼 전체를 어둡히지 않고, 글씨가 얹히는 가운데만 살짝 낮춰요 */
+  background: radial-gradient(72% 42% at 50% 46%, rgba(5, 6, 15, 0.72), rgba(5, 6, 15, 0) 72%);
+}
+
+.home-top {
+  position: absolute;
+  top: calc(var(--sa-top) + var(--navbar-h));
+  left: calc(var(--sa-left) + 18px);
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-  margin-top: 16px;
   font-size: 13px;
 }
-.who b { font-weight: 700; color: rgba(255, 255, 255, 0.9); }
+.home-top b { font-weight: 700; color: rgba(255, 255, 255, 0.9); }
 
-/* ── 타이틀 ─────────────────────────────────── */
+.home-center {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 44%;
+  transform: translateY(-50%);
+  text-align: center;
+  padding: 0 20px;
+}
+
 .logo {
-  font-size: 46px;
+  font-size: clamp(40px, 13vw, 54px);
   line-height: 1.02;
   font-weight: 800;
   letter-spacing: -0.5px;
+  text-shadow: 0 4px 26px rgba(0, 0, 0, 0.6);
 }
 .logo span { display: block; color: #5fd0ff; }
 
-.tagline {
-  margin-top: 10px;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.62);
-}
-
-.record {
-  display: flex;
-  gap: 10px;
-  margin: 22px 0 18px;
-}
-.record > div {
-  flex: 1;
-  padding: 12px 8px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.07);
-}
-.record-label {
-  display: block;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.5);
-  margin-bottom: 4px;
-}
-.record b { font-size: 20px; font-weight: 700; }
-
-.howto {
-  list-style: none;
-  text-align: left;
-  margin-bottom: 24px;
-}
-.howto li {
-  position: relative;
-  padding-left: 14px;
-  margin-bottom: 8px;
+.home-record {
+  margin-top: 14px;
   font-size: 12.5px;
-  line-height: 1.55;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(255, 255, 255, 0.55);
 }
-.howto li::before {
-  content: '';
-  position: absolute;
-  left: 2px;
-  top: 8px;
-  width: 4px;
-  height: 4px;
+.home-record b { color: rgba(255, 255, 255, 0.92); font-weight: 700; }
+.home-record i {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  margin: 0 9px;
   border-radius: 50%;
-  background: #5fd0ff;
+  background: rgba(255, 255, 255, 0.3);
+  vertical-align: 3px;
 }
-.howto b { color: #fff; font-weight: 600; }
+
+.tap-hint {
+  margin-top: 34px;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.82);
+}
+.tap-hint span {
+  display: inline-block;
+  animation: tap-breathe 1.9s ease-in-out infinite;
+}
+@keyframes tap-breathe {
+  0%, 100% { opacity: 0.45; transform: translateY(0); }
+  50%      { opacity: 1;    transform: translateY(-3px); }
+}
+
+/* 세로로 쌓은 모양 버튼 줄 — 우측 */
+.home-tools {
+  position: absolute;
+  right: calc(var(--sa-right) + 14px);
+  top: calc(var(--sa-top) + var(--navbar-h) + 8px);
+  bottom: calc(var(--sa-bottom) + 16px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 26px;
+}
+
+/*
+  모양 버튼 — 사각형/원 안에 아이콘을 넣은 게 아니라
+  **테두리 선 자체가 톱니바퀴 · 장바구니 · 트로피 모양**이에요.
+  배경이 없어서 그림자(drop-shadow)로 우주 배경과 분리해요.
+*/
+.shape-btn {
+  pointer-events: auto;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s ease, color 0.15s ease;
+}
+.shape-btn svg {
+  display: block;
+  width: 34px;
+  height: 34px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.85));
+}
+.shape-btn:active { transform: scale(0.88); color: #5fd0ff; }
+
+.shape-label {
+  display: block;
+  margin-top: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+/* 게임 중 일시정지 — 프레임워크 X 버튼 바로 아래 */
+.shape-btn-pause {
+  position: absolute;
+  right: calc(var(--sa-right) + 16px);
+  top: calc(var(--sa-top) + var(--navbar-h) + 6px);
+  z-index: 12;
+}
+.shape-btn-pause svg { width: 26px; height: 26px; stroke-width: 1.6; }
 
 /* ── 게임 오버 ───────────────────────────────── */
 .over-reason {
@@ -241,44 +322,6 @@ html, body {
 
 .btn-primary { background: #3182f6; }
 
-/* 타이틀의 상점 · 랭킹 두 칸 */
-.menu-row {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
-}
-.btn-tile {
-  flex: 1;
-  margin-top: 0;
-  padding: 14px 8px 12px;
-  background: rgba(255, 255, 255, 0.08);
-  text-align: center;
-}
-.tile-ico {
-  display: block;
-  margin: 0 auto 6px;
-  width: 26px;
-  height: 26px;
-  color: #5fd0ff;
-}
-.tile-ico svg {
-  width: 100%;
-  height: 100%;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.tile-label { display: block; font-size: 14px; font-weight: 700; }
-.tile-sub {
-  display: block;
-  margin-top: 2px;
-  font-size: 11px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.45);
-}
-
 .btn-inline {
   width: auto;
   margin-top: 0;
@@ -288,7 +331,6 @@ html, body {
   background: rgba(255, 255, 255, 0.14);
 }
 .btn-reward { background: linear-gradient(135deg, #7b3ff2, #b44bf0); }
-.btn-reward em { font-style: normal; font-weight: 500; opacity: 0.8; font-size: 13px; }
 .btn-ghost { background: rgba(255, 255, 255, 0.1); }
 .btn-quiet {
   background: none;
@@ -297,44 +339,6 @@ html, body {
   font-size: 14px;
   padding: 13px;
 }
-
-/* ── 사운드 토글 (좌측 하단) ─────────────────── */
-.icon-btn {
-  position: absolute;
-  left: calc(var(--sa-left) + 14px);
-  bottom: calc(var(--sa-bottom) + 14px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
-  border: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  line-height: 1;
-  cursor: pointer;
-  transition: transform 0.1s ease;
-}
-.icon-btn:active { transform: scale(0.92); }
-.icon-btn.is-off { opacity: 0.45; }
-
-/* 직접 그린 아이콘 — 채움(스피커 몸통) + 선(음파 / 소거 표시) */
-.ico {
-  width: 22px;
-  height: 22px;
-  display: block;
-}
-.ico .ico-fill { fill: currentColor; }
-.ico g {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.9;
-  stroke-linecap: round;
-}
-.icon-btn .ico-off { display: none; }
-.icon-btn.is-off .ico-on { display: none; }
-.icon-btn.is-off .ico-off { display: block; }
 
 /* ── 시트 공통 (상점 · 랭킹 · 설정) ──────────── */
 .sheet-head {

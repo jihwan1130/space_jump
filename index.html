@@ -14,56 +14,63 @@
   <!-- 게임 위에 얹히는 UI. 게임 중에는 포인터 이벤트를 통과시켜요. -->
   <div id="ui" class="ui">
 
-    <!-- 설정(톱니바퀴): 프레임워크 X 버튼(우측 상단)과 겹치지 않게 좌측 하단에 둬요 -->
-    <!-- 아이콘은 시스템 이모지 대신 직접 그린 SVG라 기기·OS가 달라도 똑같이 보여요. -->
-    <button id="btn-settings" class="icon-btn" type="button" aria-label="설정 열기">
-      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <path class="ico-fill" d="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8zm0 1.9a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z" />
-        <path class="ico-fill" d="M10.9 2.4h2.2l.35 2.1c.5.16.97.38 1.4.66l1.85-1.1 1.55 1.55-1.1 1.85c.28.43.5.9.66 1.4l2.1.35v2.2l-2.1.35a6.6 6.6 0 0 1-.66 1.4l1.1 1.85-1.55 1.55-1.85-1.1c-.43.28-.9.5-1.4.66l-.35 2.1h-2.2l-.35-2.1a6.6 6.6 0 0 1-1.4-.66l-1.85 1.1-1.55-1.55 1.1-1.85a6.6 6.6 0 0 1-.66-1.4l-2.1-.35v-2.2l2.1-.35c.16-.5.38-.97.66-1.4l-1.1-1.85 1.55-1.55 1.85 1.1c.43-.28.9-.5 1.4-.66zM12 6.7a5.3 5.3 0 1 0 0 10.6 5.3 5.3 0 0 0 0-10.6z" />
+    <!--
+      홈 — 별도의 시작 화면 패널 없이, 게임 화면 위에 그대로 얹혀요.
+      아무 데나 탭하면 바로 시작하고, 우측 버튼을 누르면 그쪽으로 가요.
+      버튼은 사각형 안에 아이콘을 넣은 게 아니라 **테두리 자체가 그 모양**이에요.
+    -->
+    <div id="home" class="home">
+      <div class="home-top">
+        <b id="home-nick">우주미아0000</b>
+        <span id="home-wallet" class="wallet">0</span>
+      </div>
+
+      <div class="home-center">
+        <h1 class="logo">SPACE<span>JUMP</span></h1>
+        <p class="home-record">
+          최고 <b id="home-best">0</b><i></i>콤보 <b id="home-combo">x0</b>
+        </p>
+        <p class="tap-hint"><span>화면을 탭하여 시작</span></p>
+      </div>
+
+      <div class="home-tools">
+        <button id="btn-settings" class="shape-btn" type="button" aria-label="설정">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M9.71 1.24 L14.29 1.24 L14.29 4.02 L16.02 4.74 L17.99 2.77 L21.23 6.01 L19.26 7.98 L19.98 9.71 L22.76 9.71 L22.76 14.29 L19.98 14.29 L19.26 16.02 L21.23 17.99 L17.99 21.23 L16.02 19.26 L14.29 19.98 L14.29 22.76 L9.71 22.76 L9.71 19.98 L7.98 19.26 L6.01 21.23 L2.77 17.99 L4.74 16.02 L4.02 14.29 L1.24 14.29 L1.24 9.71 L4.02 9.71 L4.74 7.98 L2.77 6.01 L6.01 2.77 L7.98 4.74 L9.71 4.02 Z" />
+            <circle cx="12" cy="12" r="3.6" />
+          </svg>
+          <span class="shape-label">설정</span>
+        </button>
+
+        <button id="btn-shop" class="shape-btn" type="button" aria-label="상점">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <!-- 옆면을 곧게 세워요. 아래로 좁아지면 쓰레기통처럼 보여요. -->
+            <path d="M5.4 8.6h13.2v10.9a2 2 0 0 1-2 2H7.4a2 2 0 0 1-2-2z" />
+            <path d="M9 8.6V6.9a3 3 0 0 1 6 0v1.7" />
+          </svg>
+          <span class="shape-label">상점</span>
+        </button>
+
+        <button id="btn-rank" class="shape-btn" type="button" aria-label="랭킹">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M7.6 2.9h8.8v6.2a4.4 4.4 0 0 1-8.8 0z" />
+            <path d="M7.6 4.4H4.9a3 3 0 0 0 2.9 3.6" />
+            <path d="M16.4 4.4h2.7a3 3 0 0 1-2.9 3.6" />
+            <path d="M12 13.5v3.2" />
+            <path d="M8.9 20.6h6.2l-1-3.9H9.9z" />
+          </svg>
+          <span class="shape-label">랭킹</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 게임 중 일시정지. 프레임워크 X 버튼 바로 아래에 둬요. -->
+    <button id="btn-pause" class="shape-btn shape-btn-pause is-hidden" type="button" aria-label="일시정지">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <rect x="6.2" y="4.4" width="4.4" height="15.2" rx="1.8" />
+        <rect x="13.4" y="4.4" width="4.4" height="15.2" rx="1.8" />
       </svg>
     </button>
-
-    <!-- 타이틀 -->
-    <section id="screen-title" class="screen">
-      <div class="panel">
-        <h1 class="logo">SPACE<span>JUMP</span></h1>
-        <p class="tagline">지구에서 출발해 우주 끝까지</p>
-
-        <p class="who"><b id="title-nick">우주미아0000</b><span id="title-wallet" class="wallet">0</span></p>
-
-        <div class="record">
-          <div><span class="record-label">최고 기록</span><b id="title-best">0</b></div>
-          <div><span class="record-label">최고 콤보</span><b id="title-best-combo">0</b></div>
-        </div>
-
-        <ul class="howto">
-          <li>화면을 <b>탭</b>하면 우주선이 향한 방향 그대로 발사돼요.</li>
-          <li>다음 행성의 <b>점선 궤도</b> 안에 들어가면 착지해요.</li>
-          <li>길목의 <b>보석</b>을 주우면 판이 끝날 때 지갑에 들어와요.</li>
-          <li>목성(스테이지 4)부터 <b>화면이 저절로 올라와요.</b> 아래로 밀려나면 끝이에요.</li>
-        </ul>
-
-        <button id="btn-start" class="btn btn-primary" type="button">게임 시작하기</button>
-
-        <!-- 상점 · 랭킹 대시보드 -->
-        <div class="menu-row">
-          <button id="btn-shop" class="btn btn-tile" type="button">
-            <span class="tile-ico" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="M4.5 8.5h15l-1.3 10a1.6 1.6 0 0 1-1.6 1.4H7.4a1.6 1.6 0 0 1-1.6-1.4zM8.6 8.5a3.4 3.4 0 0 1 6.8 0" /></svg>
-            </span>
-            <span class="tile-label">상점</span>
-            <span class="tile-sub">우주선 스킨</span>
-          </button>
-          <button id="btn-rank" class="btn btn-tile" type="button">
-            <span class="tile-ico" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="M4.6 20V12.4M12 20V4.6M19.4 20v-5.2" /></svg>
-            </span>
-            <span class="tile-label">랭킹</span>
-            <span class="tile-sub" id="rank-sub">순위 보기</span>
-          </button>
-        </div>
-      </div>
-    </section>
 
     <!-- 게임 오버 -->
     <section id="screen-over" class="screen is-hidden">
@@ -74,21 +81,19 @@
         <p id="over-gems" class="over-gems is-hidden">보석 <b>0</b>개 획득</p>
         <p id="over-best" class="over-best">최고 기록 0</p>
 
-        <button id="btn-revive" class="btn btn-reward is-hidden" type="button">
-          광고 보고 이어하기 <em id="revive-count">(1회 남음)</em>
-        </button>
-        <button id="btn-retry" class="btn btn-primary" type="button">다시 도전하기</button>
-        <button id="btn-rank-over" class="btn btn-ghost is-hidden" type="button">랭킹 보러 가기</button>
-        <button id="btn-quit" class="btn btn-quiet" type="button">그만하기</button>
+        <button id="btn-revive" class="btn btn-reward is-hidden" type="button">광고보고 부활하기</button>
+        <button id="btn-retry" class="btn btn-primary" type="button">재도전하기</button>
+        <button id="btn-home-over" class="btn btn-ghost" type="button">홈으로 이동</button>
       </div>
     </section>
 
-    <!-- 백그라운드에서 돌아왔을 때 -->
+    <!-- 일시정지 (직접 누르거나, 백그라운드에서 돌아왔을 때) -->
     <section id="screen-pause" class="screen is-hidden">
       <div class="panel panel-sm">
         <h2 class="panel-title">잠시 멈췄어요</h2>
         <p class="panel-desc">준비되면 이어서 진행할게요.</p>
-        <button id="btn-resume" class="btn btn-primary" type="button">이어서 하기</button>
+        <button id="btn-resume" class="btn btn-primary" type="button">이어하기</button>
+        <button id="btn-home-pause" class="btn btn-ghost" type="button">홈으로 이동</button>
       </div>
     </section>
 
@@ -104,7 +109,7 @@
 
     <!-- ── 상점 ─────────────────────────────── -->
     <section id="screen-shop" class="screen is-hidden">
-      <div class="panel panel-wide">
+      <div class="panel panel-wide no-bar">
         <div class="sheet-head">
           <h2 class="panel-title">상점</h2>
           <span class="wallet" id="shop-wallet">0</span>
@@ -117,12 +122,12 @@
 
     <!-- ── 랭킹 대시보드 ────────────────────── -->
     <section id="screen-rank" class="screen is-hidden">
-      <div class="panel panel-wide">
+      <div class="panel panel-wide no-bar">
         <div class="sheet-head">
           <h2 class="panel-title">랭킹</h2>
           <span id="rank-mine" class="rank-mine"></span>
         </div>
-        <div id="rank-list" class="rank-list"></div>
+        <div id="rank-list" class="rank-list no-bar"></div>
         <button id="btn-rank-toss" class="btn btn-ghost is-hidden" type="button">토스 게임센터 랭킹</button>
         <button id="btn-rank-close" class="btn btn-primary" type="button">닫기</button>
       </div>
@@ -130,7 +135,7 @@
 
     <!-- ── 설정 ─────────────────────────────── -->
     <section id="screen-settings" class="screen is-hidden">
-      <div class="panel panel-wide">
+      <div class="panel panel-wide no-bar">
         <h2 class="panel-title">설정</h2>
 
         <div class="field">
