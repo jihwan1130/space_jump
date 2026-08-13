@@ -13,6 +13,8 @@
 html, body {
   width: 100%;
   height: 100%;
+  /* 모바일 주소창이 접혀도 실제 보이는 높이에 맞춰요. (지원 안 하면 위의 100%로 떨어져요) */
+  height: 100dvh;
   overflow: hidden;
   background: #05060f;
   color: #fff;
@@ -110,12 +112,17 @@ html, body {
   font-weight: 700;
   white-space: nowrap;
 }
+/*
+  보석 아이콘 — 인게임에 떠 있는 보석과 같은 실루엣이어야 해요.
+  가로세로가 비슷하면 뭉툭해 보여서, 세로를 1.35배쯤 길게 잡아요.
+  (관은 짧고 아래 뿔이 길어야 깎인 보석처럼 보여요)
+*/
 .wallet::before {
   content: '';
-  width: 12px;
-  height: 13px;
-  background: linear-gradient(160deg, #eefeff 0%, #7fe6ff 45%, #1b7fa8 100%);
-  clip-path: polygon(28% 0, 72% 0, 100% 34%, 50% 100%, 0 34%);
+  width: 14px;
+  height: 15px;
+  background: linear-gradient(158deg, #f2feff 0%, #a8f0ff 32%, #4fc4e8 62%, #14688c 100%);
+  clip-path: polygon(26% 0, 74% 0, 100% 32%, 50% 100%, 0 32%);
 }
 
 /* ── 홈 (별도 시작 화면 없이 게임 화면 위에 얹혀요) ──── */
@@ -427,10 +434,10 @@ html, body {
 }
 .shop-action .cost::before {
   content: '';
-  width: 10px;
-  height: 11px;
-  background: #d5fbff;
-  clip-path: polygon(28% 0, 72% 0, 100% 34%, 50% 100%, 0 34%);
+  width: 11px;
+  height: 12px;
+  background: #e4fdff;
+  clip-path: polygon(26% 0, 74% 0, 100% 32%, 50% 100%, 0 32%);
 }
 
 /* ── 랭킹 ───────────────────────────────────── */

@@ -146,10 +146,18 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
   let oy = 0;
   let dpr = 1;
   let insets = { top: 0, bottom: 0, left: 0, right: 0 };
+  // 화면(CSS px) 크기 — resize()에서만 갱신하고 나머지는 이 값을 봐요.
+  // 여기저기서 window.innerWidth를 다시 읽으면 리사이즈 도중 값이 어긋나요.
+  let vw = 1;
+  let vh = 1;
 
   function resize() {
-    const vw = Math.max(1, window.innerWidth);
-    const vh = Math.max(1, window.innerHeight);
+    // visualViewport가 있으면 그걸 먼저 봐요.
+    // 모바일 브라우저는 주소창이 접히면 innerHeight가 실제 보이는 높이와 어긋나는데,
+    // 그대로 쓰면 캔버스가 화면보다 커져서 아래쪽 UI가 잘려요.
+    const vv = window.visualViewport;
+    vw = Math.max(1, Math.round(vv?.width || window.innerWidth));
+    vh = Math.max(1, Math.round(vv?.height || window.innerHeight));
     dpr = Math.min(window.devicePixelRatio || 1, 2);
 
     // 기기 비율을 그대로 논리 높이로 받아 풀스크린을 만들어요.
@@ -173,13 +181,24 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
     return {
       top: clamp(toLogicalY(insets.top), 0, H) + 10,
       left: clamp(toLogicalX(insets.left), 0, W) + 18,
-      right: clamp(toLogicalX(window.innerWidth - insets.right), 0, W) - 18,
-      bottom: clamp(toLogicalY(window.innerHeight - insets.bottom), 0, H) - 10,
+      right: clamp(toLogicalX(vw - insets.right), 0, W) - 18,
+      bottom: clamp(toLogicalY(vh - insets.bottom), 0, H) - 10,
     };
   }
 
-  window.addEventListener('resize', resize);
-  window.addEventListener('orientationchange', resize);
+  // 리사이즈는 한 프레임에 한 번만 반영해요. (연속 이벤트로 캔버스를 계속 다시 만들지 않게)
+  let resizeRaf = 0;
+  const queueResize = () => {
+    if (resizeRaf) return;
+    resizeRaf = requestAnimationFrame(() => {
+      resizeRaf = 0;
+      resize();
+    });
+  };
+  window.addEventListener('resize', queueResize);
+  window.addEventListener('orientationchange', queueResize);
+  // 모바일 주소창이 접히고 펴질 때는 resize가 안 오는 기기가 있어요.
+  window.visualViewport?.addEventListener('resize', queueResize);
   resize();
 
   /* ── 상태 */
@@ -1479,25 +1498,46 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
 
     // 이번 판에서 주운 보석
     if (state.gems > 0) {
+      // HUD용 미니 보석 — 화면에 떠 있는 보석(drawGem)과 같은 비율이에요.
+      // 관(위)은 짧고 뿔(아래)이 길어야 깎인 보석처럼 보여요.
       ctx.save();
-      ctx.translate(x + 7, y + 4);
-      ctx.scale(0.62, 0.62);
-      // HUD용 미니 보석 (drawGem과 같은 실루엣)
-      ctx.fillStyle = '#7fe6ff';
+      ctx.translate(x + 7, y + 3);
+      const gw = 7.2; // 반폭
+      const gTop = -5.4;
+      const gMid = -1.4;
+      const gBot = 8.4;
+
+      ctx.fillStyle = '#2f9fc8';
       ctx.beginPath();
-      ctx.moveTo(-9, -2);
-      ctx.lineTo(-5, -9);
-      ctx.lineTo(5, -9);
-      ctx.lineTo(9, -2);
-      ctx.lineTo(0, 10);
+      ctx.moveTo(-gw, gMid);
+      ctx.lineTo(gw, gMid);
+      ctx.lineTo(0, gBot);
       ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = '#d5fbff';
+
+      ctx.fillStyle = '#7fe6ff';
       ctx.beginPath();
-      ctx.moveTo(-9, -2);
-      ctx.lineTo(-5, -9);
-      ctx.lineTo(0, -9);
-      ctx.lineTo(0, -2);
+      ctx.moveTo(-gw, gMid);
+      ctx.lineTo(-gw * 0.55, gTop);
+      ctx.lineTo(gw * 0.55, gTop);
+      ctx.lineTo(gw, gMid);
+      ctx.closePath();
+      ctx.fill();
+
+      // 빛 받는 왼쪽 면
+      ctx.fillStyle = '#dbfcff';
+      ctx.beginPath();
+      ctx.moveTo(-gw, gMid);
+      ctx.lineTo(-gw * 0.55, gTop);
+      ctx.lineTo(0, gTop);
+      ctx.lineTo(0, gMid);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#59c8ec';
+      ctx.beginPath();
+      ctx.moveTo(-gw, gMid);
+      ctx.lineTo(0, gMid);
+      ctx.lineTo(0, gBot);
       ctx.closePath();
       ctx.fill();
       ctx.restore();
@@ -1643,8 +1683,6 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
     // 1) 기기 화면 전체를 배경으로 채워요 (레터박스가 생겨도 빈 곳이 없게)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const info = stageInfo(state.stage);
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
     const bg = ctx.createLinearGradient(0, 0, 0, vh);
     bg.addColorStop(0, '#04050d');
     bg.addColorStop(0.55, '#05060f');
@@ -1839,7 +1877,9 @@ export function createGame({ canvas, onGameOver, haptic = () => {} }) {
     destroy() {
       cancelAnimationFrame(raf);
       canvas.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('resize', resize);
+      window.removeEventListener('resize', queueResize);
+      window.removeEventListener('orientationchange', queueResize);
+      window.visualViewport?.removeEventListener('resize', queueResize);
     },
   };
 }
