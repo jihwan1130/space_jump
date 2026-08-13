@@ -1,5 +1,10 @@
 node_modules/
+dist/
+*.ait
 .vercel
+.env
+.env.*
+!.env.example
 .DS_Store
 Thumbs.db
 *.log

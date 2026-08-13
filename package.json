@@ -1,0 +1,19 @@
+{
+  "name": "space-jump",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "SPACE JUMP — 앱인토스 미니앱 (WebView)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && ait build",
+    "preview": "vite preview",
+    "deploy": "ait deploy"
+  },
+  "dependencies": {
+    "@apps-in-toss/web-framework": "^3.0.3"
+  },
+  "devDependencies": {
+    "vite": "^6.3.6"
+  }
+}

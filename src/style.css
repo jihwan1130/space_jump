@@ -1,0 +1,235 @@
+/* 안전 영역 값은 SDK(SafeArea)에서 읽어 JS가 채워 넣어요. */
+:root {
+  --sa-top: 0px;
+  --sa-bottom: 0px;
+  --sa-left: 0px;
+  --sa-right: 0px;
+  /* 우측 상단 프레임워크 X · 더보기 버튼이 차지하는 영역 */
+  --navbar-h: 52px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #05060f;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  touch-action: none;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#game {
+  position: fixed;
+  inset: 0;
+  display: block;
+  touch-action: none;
+}
+
+/* ── 오버레이 UI ─────────────────────────────── */
+.ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;   /* 게임 중에는 탭이 캔버스로 그대로 전달돼요 */
+  z-index: 10;
+}
+.ui .screen,
+.ui .icon-btn,
+.ui .toast { pointer-events: auto; }
+
+.is-hidden { display: none !important; }
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding:
+    calc(var(--sa-top) + var(--navbar-h)) calc(var(--sa-right) + 20px)
+    calc(var(--sa-bottom) + 20px) calc(var(--sa-left) + 20px);
+  background: radial-gradient(120% 80% at 50% 40%, rgba(5, 6, 15, 0.72), rgba(5, 6, 15, 0.94));
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  animation: fade-in 0.22s ease-out;
+}
+
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+.panel {
+  width: 100%;
+  max-width: 340px;
+  text-align: center;
+  animation: pop-in 0.26s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.panel-sm { max-width: 300px; }
+
+/* ── 타이틀 ─────────────────────────────────── */
+.logo {
+  font-size: 46px;
+  line-height: 1.02;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.logo span { display: block; color: #5fd0ff; }
+
+.tagline {
+  margin-top: 10px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.record {
+  display: flex;
+  gap: 10px;
+  margin: 22px 0 18px;
+}
+.record > div {
+  flex: 1;
+  padding: 12px 8px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.07);
+}
+.record-label {
+  display: block;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 4px;
+}
+.record b { font-size: 20px; font-weight: 700; }
+
+.howto {
+  list-style: none;
+  text-align: left;
+  margin-bottom: 24px;
+}
+.howto li {
+  position: relative;
+  padding-left: 14px;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.62);
+}
+.howto li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 8px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #5fd0ff;
+}
+.howto b { color: #fff; font-weight: 600; }
+
+/* ── 게임 오버 ───────────────────────────────── */
+.over-reason {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ff6b6b;
+  margin-bottom: 10px;
+}
+.over-score {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+}
+.over-score b { font-size: 64px; font-weight: 800; letter-spacing: -2px; }
+.over-score span { font-size: 16px; color: rgba(255, 255, 255, 0.55); }
+.over-detail {
+  margin-top: 8px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.65);
+}
+.over-best {
+  margin: 4px 0 26px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+/* ── 공통 패널 ───────────────────────────────── */
+.panel-title { font-size: 20px; font-weight: 700; }
+.panel-desc {
+  margin: 10px 0 24px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.5;
+}
+
+/* ── 버튼 ───────────────────────────────────── */
+.btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 15px 16px;
+  border: 0;
+  border-radius: 14px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: transform 0.1s ease, opacity 0.15s ease;
+}
+.btn:active { transform: scale(0.975); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+
+.btn-primary { background: #3182f6; }
+.btn-reward { background: linear-gradient(135deg, #7b3ff2, #b44bf0); }
+.btn-reward em { font-style: normal; font-weight: 500; opacity: 0.8; font-size: 13px; }
+.btn-ghost { background: rgba(255, 255, 255, 0.1); }
+.btn-quiet {
+  background: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 500;
+  font-size: 14px;
+  padding: 13px;
+}
+
+/* ── 사운드 토글 (좌측 하단) ─────────────────── */
+.icon-btn {
+  position: absolute;
+  left: calc(var(--sa-left) + 14px);
+  bottom: calc(var(--sa-bottom) + 14px);
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.icon-btn:active { transform: scale(0.92); }
+.icon-btn.is-off { opacity: 0.45; }
+
+/* ── 토스트 ─────────────────────────────────── */
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--sa-bottom) + 78px);
+  transform: translateX(-50%);
+  max-width: 82vw;
+  padding: 11px 16px;
+  border-radius: 12px;
+  background: rgba(20, 22, 34, 0.94);
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+  animation: fade-in 0.2s ease-out;
+}
