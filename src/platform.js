@@ -79,6 +79,34 @@ export async function getUserKey() {
   return null;
 }
 
+/**
+ * 토스 식별키를 못 받았을 때 쓰는 기기 단위 대체 ID.
+ *
+ * 이게 없으면 다음 경우에 **서버에 아무것도 저장되지 않아요.**
+ *  - 일반 브라우저(로컬 개발 · 웹 배포)
+ *  - 토스 앱이지만 버전이 낮거나 게임 카테고리가 아니라 식별키 조회가 실패한 경우
+ *
+ * 한 번 만들면 localStorage에 남아서 같은 기기는 계속 같은 사람으로 취급돼요.
+ * `dev-` 접두사로 토스 해시와 구분해요.
+ */
+export function getDeviceKey() {
+  const KEY = 'spacejump.device';
+  try {
+    let id = window.localStorage.getItem(KEY);
+    if (!id) {
+      const rand =
+        window.crypto?.randomUUID?.() ??
+        `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+      id = `dev-${rand}`;
+      window.localStorage.setItem(KEY, id);
+    }
+    return id;
+  } catch {
+    // localStorage조차 못 쓰면 서버 저장은 포기하고 게임만 돌려요.
+    return null;
+  }
+}
+
 /* ────────────────────────────── 저장소 */
 
 /**

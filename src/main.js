@@ -21,6 +21,7 @@ import { validateNickname, defaultNickname, nicknameCandidate } from './nickname
 import {
   isInToss,
   getUserKey,
+  getDeviceKey,
   createStore,
   lockScreen,
   closeApp,
@@ -906,9 +907,14 @@ async function boot() {
   lockScreen();
 
   // 사용자 식별키 → 계정별 세이브
-  userKey = await getUserKey();
-  store = createStore(userKey);
+  // 로컬 세이브는 예전처럼 토스 식별키로만 구분해요. (기존 저장이 그대로 열리게)
+  const tossKey = await getUserKey();
+  store = createStore(tossKey);
   applySaved(await store.load());
+
+  // 서버 저장·랭킹에 쓸 신원. 토스 식별키가 없으면 기기 단위 ID로 떨어져요.
+  // 이게 없으면 브라우저에서는 랭킹에 아무것도 안 올라가요.
+  userKey = tossKey || getDeviceKey();
 
   // 로컬 값으로 먼저 화면을 그려요. 서버는 늦게 와도 괜찮아요.
   audio.enabled = settings.sfx || settings.bgm;
