@@ -6,6 +6,33 @@
   --sa-right: 0px;
   /* 우측 상단 프레임워크 X · 더보기 버튼이 차지하는 영역 */
   --navbar-h: 52px;
+
+  /* ── 하단 배너 광고 ──────────────────────────
+     배너가 안 붙는 환경(브라우저)에서는 0이라 화면이 예전 그대로예요.
+     main.js가 배너를 붙이면 body에 .has-banner가 붙고 아래 값들이 살아나요.
+
+       --banner-ad-h : 배너 높이. 화면 맨 아래에 딱 붙고, 아래로 여백을 두지 않아요.
+                       홈 인디케이터 영역까지 배너가 덮습니다. (src/config.js BANNER_AD_H)
+       --banner-h    : 게임·UI가 피해야 하는 아래쪽 높이. 배너 높이와 같아요.
+       --sa-bottom-ui: 오버레이 UI가 쓸 아래쪽 안전 영역.
+                       배너가 홈 인디케이터를 이미 덮고 있어서, UI가 또 띄우면
+                       여백이 두 번 들어가요. 그래서 0으로 죽여요. */
+  --banner-ad-h: 62px;
+  --banner-h: 0px;
+  --sa-bottom-ui: var(--sa-bottom);
+  /*
+    보석 실루엣 — 관 29% : 뿔 71%, 테이블 = 허리폭의 55%.
+    비율(%)이라 쓰는 쪽에서 width:height를 20:17.7로 잡아야 지갑 보석과 같은 모양이 나와요.
+  */
+  --gem-clip: polygon(22.5% 0, 77.5% 0, 100% 29.4%, 50% 100%, 0 29.4%);
+
+  /*
+    보석 아이콘 — 인게임에 떠 있는 보석을 그대로 축소한 거예요.
+    면 구성(어두운 뿔 / 밝은 왼쪽 면 / 관 / 테이블)과 비율(20:17.7)이 인게임과 같아요.
+    지갑과 업적 「받기」 버튼이 같은 그림을 써야 "이게 저기로 들어간다"가 읽혀요.
+    쓰는 쪽에서 width:height를 20:17.7로 잡아주세요.
+  */
+  --gem-svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 17.7'%3E%3Cpath fill='%231b7fa8' d='M0 5.2 10 17.7 20 5.2Z'/%3E%3Cpath fill='%233fb6dd' d='M0 5.2 10 17.7 10 5.2Z'/%3E%3Cpath fill='%237fe6ff' d='M0 5.2 4.5 0 15.5 0 20 5.2Z'/%3E%3Cpath fill='%23d5fbff' d='M0 5.2 4.5 0 10 0 10 5.2Z'/%3E%3Cpath fill='%23eefeff' d='M4.5 0 15.5 0 13.4 2 6.6 2Z'/%3E%3Cpath stroke='rgba(255,255,255,.45)' stroke-width='.7' fill='none' d='M0 5.2H20M10 5.2V17.7'/%3E%3C/svg%3E");
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -27,17 +54,237 @@ html, body {
   -webkit-user-select: none;
 }
 
+/*
+  position:fixed 가 아니라 absolute 예요.
+  iOS(WebKit)는 fixed 요소를 별도 합성 레이어로 올리면서 그 레이어의 래스터화 배율을
+  캔버스 백버퍼 크기와 무관하게 잡는 경우가 있어요. 그러면 백버퍼를 아무리 크게 잡아도
+  화면에는 낮은 해상도로 합성돼요. (모바일 사파리·토스 웹뷰 양쪽에서만 뭉개지고
+  PC 크롬은 멀쩡했던 것이 이 방향을 가리켜요)
+  html·body가 height:100% + overflow:hidden 이라 absolute 로도 화면을 그대로 채워요.
+*/
 #game {
-  position: fixed;
-  inset: 0;
+  position: absolute;
+  /* 아래쪽만 배너 높이만큼 물러나요. 캔버스가 줄면 game.js의 ResizeObserver가
+     알아서 논리 높이(H)·배율을 다시 잡아서 화면비가 그대로 유지돼요. */
+  inset: 0 0 var(--banner-h) 0;
   display: block;
   touch-action: none;
+}
+
+/* ── 하단 배너 광고 ─────────────────────────── */
+body.has-banner {
+  --banner-h: var(--banner-ad-h);
+  --sa-bottom-ui: 0px;
+}
+
+/*
+  화면 맨 아래에 딱 붙어요.
+
+  아래쪽에 안전 영역만큼 여백을 두면 광고 밑에 빈 검은 띠가 하나 더 생겨서,
+  실제 광고보다 훨씬 두꺼워 보이고 게임 화면도 그만큼 더 깎여요.
+  홈 인디케이터 위로 광고가 지나가는 건 토스 미니앱들이 쓰는 방식 그대로예요.
+*/
+.ad-banner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20; /* 오버레이 UI(10)보다 위 — 결과 화면이 광고를 덮으면 안 돼요 */
+  height: var(--banner-h);
+  background: #05060f;
+  /* 게임 화면과 광고를 가르는 실선. border를 쓰면 상자 높이가 1px 깎여서 그림자로 그어요. */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* SDK가 이 안을 채워요. 우리가 아무것도 넣으면 안 돼요. */
+.ad-banner-slot {
+  width: 100%;
+  height: 100%;
+}
+
+/* 개발용 자리 표시 — 토스 앱 밖에서 레이아웃만 확인할 때 (main.js가 붙여요) */
+.ad-banner.is-placeholder .ad-banner-slot {
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.28);
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0.04) 0 8px,
+    transparent 8px 16px
+  );
+}
+
+/*
+  스토리 모드 캔버스 (2.0) — 본편 캔버스 바로 위에 불투명하게 덮여요.
+  #game과 같은 이유로 fixed가 아니라 absolute 예요. (iOS 합성 레이어 문제)
+  스토리를 보지 않을 때는 is-hidden이라 레이아웃에서 아예 빠져요.
+*/
+#story {
+  position: absolute;
+  inset: 0 0 var(--banner-h) 0;
+  display: block;
+  z-index: 5;
+  touch-action: none;
+}
+
+/* ── 첫 진입 화면 ─────────────────────────────
+   배경 아트가 화면을 꽉 채우고, 아래쪽 어두운 영역에 제목·메뉴가 얹혀요.
+   (배경 이미지는 scripts/make-loading-art.py 가 세로 비율로 그려둔 것) */
+.loading {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: #05060f;
+  /* 사라질 때만 전환 — 나타날 때는 즉시 보여야 해요 */
+  transition: opacity 0.4s ease, visibility 0.4s;
+}
+.loading.is-done {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* 배경 아트 — 화면비가 달라도 잘리는 부분이 최소가 되도록 cover */
+.loading-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  /* 이미지가 늦게 와도 흰 칸이 번쩍이지 않게 */
+  background: #05060f;
+}
+
+.loading-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 340px;
+  margin: 0 auto;
+  padding:
+    0 24px
+    calc(var(--sa-bottom) + 42px);
+}
+
+/* 제목 — 홈 화면 로고와 같은 처리 */
+.loading-title {
+  font-size: clamp(40px, 13vw, 54px);
+  line-height: 1.08;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  background: linear-gradient(180deg, #ffffff 0%, #eaf7ff 44%, #a6d4ef 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter:
+    drop-shadow(0 3px 16px rgba(0, 0, 0, 0.9))
+    drop-shadow(0 0 30px rgba(95, 208, 255, 0.28));
+}
+.loading-title span {
+  background: linear-gradient(180deg, #a6ecff 0%, #5fd0ff 50%, #2f9fe4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.loading-sub {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+.loading-sub > span {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.42em;
+  padding-left: 0.42em;
+  color: rgba(150, 216, 255, 0.75);
+}
+.loading-sub .rule {
+  width: 24px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(150, 216, 255, 0.55));
+}
+.loading-sub .rule:last-child {
+  background: linear-gradient(90deg, rgba(150, 216, 255, 0.55), transparent);
+}
+
+/* ── 준비 중 */
+.loading-progress {
+  width: 100%;
+  margin-top: 30px;
+  animation: fade-in 0.3s ease-out;
+}
+.loading-bar {
+  width: min(58vw, 200px);
+  height: 3px;
+  margin: 0 auto;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.loading-bar i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #5fd0ff, #a6ecff);
+  transform-origin: left center;
+  /* 최대 대기 시간에 맞춰 채워요. 그 전에 준비되면 JS가 먼저 메뉴로 바꿔요. */
+  animation: loading-fill 2.5s cubic-bezier(0.35, 0.85, 0.4, 1) forwards;
+}
+@keyframes loading-fill {
+  from { transform: scaleX(0.04); }
+  to   { transform: scaleX(1); }
+}
+.loading-hint {
+  margin-top: 12px;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.42);
+  text-align: center;
+}
+
+/* ── 준비 완료: 메뉴 */
+.loading-menu {
+  width: 100%;
+  margin-top: 26px;
+  animation: pop-in 0.34s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.loading-menu .btn { margin-top: 10px; }
+.loading-menu .btn:first-child { margin-top: 0; }
+
+.loading-note {
+  margin-top: 12px;
+  min-height: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #a6ecff;
+  text-align: center;
+}
+.loading-note:empty { min-height: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-bar i { animation-duration: 0.6s; }
+  .loading-menu { animation: none; }
 }
 
 /* ── 오버레이 UI ─────────────────────────────── */
 .ui {
   position: fixed;
-  inset: 0;
+  /* 캔버스와 같은 높이에서 끝나요. 결과 화면·버튼이 배너 위로 내려가면 안 돼요. */
+  inset: 0 0 var(--banner-h) 0;
   pointer-events: none;   /* 게임 중에는 탭이 캔버스로 그대로 전달돼요 */
   z-index: 10;
 }
@@ -56,7 +303,7 @@ html, body {
   justify-content: center;
   padding:
     calc(var(--sa-top) + var(--navbar-h)) calc(var(--sa-right) + 20px)
-    calc(var(--sa-bottom) + 20px) calc(var(--sa-left) + 20px);
+    calc(var(--sa-bottom-ui) + 20px) calc(var(--sa-left) + 20px);
   background: radial-gradient(120% 80% at 50% 40%, rgba(5, 6, 15, 0.72), rgba(5, 6, 15, 0.94));
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
@@ -113,16 +360,18 @@ html, body {
   white-space: nowrap;
 }
 /*
-  보석 아이콘 — 인게임에 떠 있는 보석과 같은 실루엣이어야 해요.
-  가로세로가 비슷하면 뭉툭해 보여서, 세로를 1.35배쯤 길게 잡아요.
-  (관은 짧고 아래 뿔이 길어야 깎인 보석처럼 보여요)
+  폭은 인게임 보석이 **가장 넓게 보이는 각도**를 기준으로 잡아요.
+  인게임 보석은 돌면서 폭이 0.62r~1.0r 사이로 변하는데, 좁은 쪽을 기준으로 하면
+  홀쭉한 마름모로 보여요. 가장 넓은 상태(가로:세로 = 20:17.7)가 보석답게 읽혀요.
+  (그림 자체는 :root의 --gem-svg — 업적 「받기」 버튼도 같은 걸 써요)
 */
 .wallet::before {
   content: '';
   width: 14px;
-  height: 15px;
-  background: linear-gradient(158deg, #f2feff 0%, #a8f0ff 32%, #4fc4e8 62%, #14688c 100%);
-  clip-path: polygon(26% 0, 74% 0, 100% 32%, 50% 100%, 0 32%);
+  height: 12.4px;
+  background: var(--gem-svg) center / contain no-repeat;
+  /* 어두운 배경 위에서 살짝 떠 보이게 */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
 }
 
 /* ── 홈 (별도 시작 화면 없이 게임 화면 위에 얹혀요) ──── */
@@ -132,44 +381,122 @@ html, body {
   pointer-events: auto;   /* 아무 데나 탭하면 시작돼요 */
   padding:
     calc(var(--sa-top) + 12px) calc(var(--sa-right) + 16px)
-    calc(var(--sa-bottom) + 16px) calc(var(--sa-left) + 16px);
+    calc(var(--sa-bottom-ui) + 16px) calc(var(--sa-left) + 16px);
   animation: fade-in 0.25s ease-out;
   /* 패널처럼 전체를 어둡히지 않고, 글씨가 얹히는 가운데만 살짝 낮춰요 */
   background: radial-gradient(72% 42% at 50% 46%, rgba(5, 6, 15, 0.72), rgba(5, 6, 15, 0) 72%);
 }
 
+/*
+  닉네임 · 보석 — 좌측 최상단.
+  내비게이션 바에서 좌측 뒤로가기·제목을 껐기 때문에 이 줄은 --navbar-h 아래로
+  내려갈 필요가 없어요. 우측 ··· · X 와는 좌우로 떨어져 있어 겹치지 않아요.
+*/
 .home-top {
   position: absolute;
-  top: calc(var(--sa-top) + var(--navbar-h));
+  top: calc(var(--sa-top) + 14px);
   left: calc(var(--sa-left) + 18px);
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 13px;
 }
-.home-top b { font-weight: 700; color: rgba(255, 255, 255, 0.9); }
+/* 닉네임 — 버튼이지만 생김새는 그냥 글씨예요. */
+.home-chip {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.12s ease;
+}
+.home-chip:active { opacity: 0.55; }
+
+/* 보석 칩을 버튼으로 쓸 때 (상점 헤더의 <span class="wallet">은 그대로 둬요) */
+.wallet-btn {
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s ease;
+}
+.wallet-btn:active { transform: scale(0.93); }
 
 .home-center {
   position: absolute;
   left: 0;
   right: 0;
-  top: 44%;
+  top: 46%;
   transform: translateY(-50%);
   text-align: center;
   padding: 0 20px;
 }
 
+/*
+  제목 로고.
+  한글 네 글자를 한 줄로 두고(두 줄이면 세로로 100px 가까이 먹어요),
+  ─ 위아래 그라디언트로 금속처럼 깎인 느낌
+  ─ 뒤 두 글자는 시안 그라디언트
+  ─ 평평한 text-shadow 대신 drop-shadow 두 겹(검정 그림자 + 시안 발광)
+  ─ 아래에 영문 부제를 자간 넓게 깔아 게임 로고처럼
+*/
 .logo {
-  font-size: clamp(40px, 13vw, 54px);
-  line-height: 1.02;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  text-shadow: 0 4px 26px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 11px;
 }
-.logo span { display: block; color: #5fd0ff; }
+
+.logo-main {
+  font-size: clamp(46px, 15vw, 62px);
+  line-height: 1.08;
+  font-weight: 800;
+  /* 한글은 자간을 바짝 붙여야 덩어리로 읽혀요 */
+  letter-spacing: -0.045em;
+  background: linear-gradient(180deg, #ffffff 0%, #eaf7ff 44%, #a6d4ef 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter:
+    drop-shadow(0 3px 14px rgba(0, 0, 0, 0.8))
+    drop-shadow(0 0 28px rgba(95, 208, 255, 0.3));
+}
+.logo-main .accent {
+  background: linear-gradient(180deg, #a6ecff 0%, #5fd0ff 50%, #2f9fe4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.logo-sub {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.logo-sub > span {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.42em;
+  /* 자간이 마지막 글자 뒤에도 붙어 왼쪽으로 치우쳐 보여요. 그만큼 밀어줘요. */
+  padding-left: 0.42em;
+  color: rgba(150, 216, 255, 0.7);
+}
+.logo-sub .rule {
+  width: 24px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(150, 216, 255, 0.5));
+}
+.logo-sub .rule:last-child {
+  background: linear-gradient(90deg, rgba(150, 216, 255, 0.5), transparent);
+}
 
 .home-record {
-  margin-top: 14px;
+  margin-top: 16px;
   font-size: 12.5px;
   color: rgba(255, 255, 255, 0.55);
 }
@@ -185,7 +512,7 @@ html, body {
 }
 
 .tap-hint {
-  margin-top: 34px;
+  margin-top: 28px;
   font-size: 14px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.82);
@@ -199,16 +526,19 @@ html, body {
   50%      { opacity: 1;    transform: translateY(-3px); }
 }
 
-/* 세로로 쌓은 모양 버튼 줄 — 우측 */
+/*
+  모양 버튼 — 우측 하단 구석에 세로로 쌓아요.
+  화면 중앙 높이가 아니라 아래쪽에 붙어 있어서 행성·궤도를 가리지 않고,
+  폭도 아이콘 한 줄(34px)뿐이라 가운데 "지구 · STAGE 1" 라벨과 안 겹쳐요.
+*/
 .home-tools {
   position: absolute;
-  right: calc(var(--sa-right) + 14px);
-  top: calc(var(--sa-top) + var(--navbar-h) + 8px);
-  bottom: calc(var(--sa-bottom) + 16px);
+  right: calc(var(--sa-right) + 16px);
+  bottom: calc(var(--sa-bottom-ui) + 22px);
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 26px;
+  align-items: center;
+  gap: 18px;
 }
 
 /*
@@ -240,6 +570,15 @@ html, body {
 }
 .shape-btn:active { transform: scale(0.88); color: #5fd0ff; }
 
+/* 아직 안 열린 기능(스토리 모드) — 눌리긴 하지만 안내만 떠요. */
+.shape-btn.is-locked { color: rgba(255, 255, 255, 0.38); }
+.shape-btn.is-locked .shape-label { color: rgba(255, 255, 255, 0.3); }
+.shape-btn.is-locked:active { color: rgba(255, 255, 255, 0.5); }
+.btn.is-locked {
+  opacity: 0.55;
+  font-weight: 600;
+}
+
 .shape-label {
   display: block;
   margin-top: 5px;
@@ -259,6 +598,105 @@ html, body {
   z-index: 12;
 }
 .shape-btn-pause svg { width: 26px; height: 26px; stroke-width: 1.6; }
+
+/* ── 튜토리얼 안내 카드 ──────────────────────────
+   전체를 어둡히지 않아요. 방금 설명한 행성·소행성·블랙홀이 카드 뒤로 보여야
+   "이게 그거구나"가 되거든요. 그래서 카드만 띄우고 배경은 거의 그대로 둡니다.
+   카드는 화면 아래쪽에 붙여서 위쪽 무대를 가리지 않아요. */
+.screen-tip {
+  align-items: flex-end;
+  background: linear-gradient(to top, rgba(5, 6, 15, 0.86) 22%, rgba(5, 6, 15, 0) 62%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/*
+  강조 대상이 화면 아래쪽(우주선 · 보석 · 블랙홀)일 때는 카드가 위로 올라가요.
+  카메라가 우주선을 78% 지점에 두는데 카드가 하단 고정이면, 스포트라이트로
+  뚫어놓은 자리와 시범 비행을 카드가 그대로 덮어버리거든요.
+*/
+.screen-tip.is-low {
+  align-items: flex-start;
+  background: linear-gradient(to bottom, rgba(5, 6, 15, 0.86) 22%, rgba(5, 6, 15, 0) 62%);
+}
+
+/* 카드는 되도록 낮게 — 무대를 가리는 만큼 코칭 표시가 안 보여요. */
+.tip-card {
+  width: 100%;
+  max-width: 340px;
+  padding: 14px 16px 4px;
+  border-radius: 18px;
+  background: rgba(10, 14, 32, 0.9);
+  border: 1px solid rgba(127, 200, 255, 0.22);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55);
+  text-align: left;
+  animation: pop-in 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.tip-step {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(143, 227, 255, 0.75);
+  margin-bottom: 6px;
+}
+
+.tip-title {
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.3;
+  color: #fff;
+  margin-bottom: 6px;
+}
+
+/* 대본의 \n을 그대로 줄바꿈으로 보여줘요. (호흡 단위로 끊어 쓴 문장이라) */
+.tip-body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.76);
+  white-space: pre-line;
+  margin-bottom: 11px;
+}
+
+/* 되돌아온 안내는 실패를 알리는 카드라 색을 달리해요. */
+.tip-card.is-retry { border-color: rgba(255, 107, 107, 0.4); }
+.tip-card.is-retry .tip-step { color: rgba(255, 158, 158, 0.85); }
+
+/* ── 튜토리얼 코칭 힌트 ──────────────────────────
+   탭이 필요 없어요. 위에서 내려와 3.4초쯤 머물다 스스로 올라가며 사라져요.
+   pointer-events를 꺼둬서 힌트 위를 눌러도 점프가 그대로 나갑니다. */
+.tutorial-hint {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--sa-top) + var(--navbar-h) + 8px);
+  z-index: 28; /* 안내 카드(.screen)보다는 아래 */
+  width: max-content;
+  max-width: calc(100% - var(--sa-left) - var(--sa-right) - 32px);
+  padding: 9px 15px;
+  border-radius: 999px;
+  background: rgba(10, 16, 32, 0.94);
+  border: 1px solid rgba(125, 255, 176, 0.34);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+  animation: coach-hint 3.4s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+
+@keyframes coach-hint {
+  0%   { opacity: 0; transform: translate(-50%, -16px); }
+  7%   { opacity: 1; transform: translate(-50%, 0); }
+  88%  { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -12px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tutorial-hint { animation: fade-in 0.2s ease-out; transform: translateX(-50%); }
+}
+
 
 /* ── 게임 오버 ───────────────────────────────── */
 .over-reason {
@@ -298,6 +736,28 @@ html, body {
   background: currentColor;
   clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
 }
+
+/* ── 스토리 모드 결과 ────────────────────────── */
+.story-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #5fd0ff;
+}
+.story-clear-title {
+  margin-top: 8px;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+/* 다음 화 예고 — 본문보다 한 톤 낮춰서 "여운"으로 읽히게 해요. */
+.story-next {
+  margin: 6px 0 24px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.55);
+}
+.story-next b { color: rgba(255, 255, 255, 0.88); font-weight: 700; }
 
 /* ── 공통 패널 ───────────────────────────────── */
 .panel-title { font-size: 20px; font-weight: 700; }
@@ -347,6 +807,25 @@ html, body {
   padding: 13px;
 }
 
+/*
+  되돌릴 수 없는 버튼.
+
+  설정 안에서는 테두리만 있는 조용한 형태(btn-danger-ghost)로 둬요. 다른 설정들
+  사이에서 혼자 새빨가면 눌러보라고 부추기는 꼴이라서요.
+  확인 화면에 가서야 채워진 붉은 버튼(btn-danger)이 나와요. 그때는 "이게 그 버튼"이
+  분명해야 하니까요. 대신 기본 손이 가는 자리는 「취소」가 가져갑니다.
+*/
+.btn-danger {
+  background: #d64550;
+  color: #fff;
+}
+.btn-danger-ghost {
+  background: none;
+  border: 1px solid rgba(255, 122, 138, 0.5);
+  color: #ff9fae;
+  font-size: 14px;
+}
+
 /* ── 시트 공통 (상점 · 랭킹 · 설정) ──────────── */
 .sheet-head {
   display: flex;
@@ -393,18 +872,6 @@ html, body {
   line-height: 1.4;
   color: rgba(255, 255, 255, 0.5);
 }
-.shop-kind {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-  vertical-align: 1px;
-}
-.shop-kind.cool { background: rgba(95, 208, 255, 0.16); color: #7fd9ff; }
-.shop-kind.fun { background: rgba(255, 209, 102, 0.16); color: #ffd166; }
-
 .shop-action {
   flex: 0 0 auto;
   padding: 9px 12px;
@@ -432,12 +899,17 @@ html, body {
   align-items: center;
   gap: 4px;
 }
+/*
+  가격 옆 보석 — 흰 글씨와 나란히 붙는 자리라 면을 넣지 않고 단색 실루엣으로 둬요.
+  (이 크기에서 면을 넣으면 뭉개져서 지저분해져요)
+  실루엣 비율은 지갑 보석과 똑같이 맞췄어요.
+*/
 .shop-action .cost::before {
   content: '';
   width: 11px;
-  height: 12px;
+  height: 9.7px;
   background: #e4fdff;
-  clip-path: polygon(26% 0, 74% 0, 100% 32%, 50% 100%, 0 32%);
+  clip-path: var(--gem-clip);
 }
 
 /* ── 랭킹 ───────────────────────────────────── */
@@ -489,6 +961,200 @@ html, body {
   line-height: 1.6;
 }
 
+/* ── 탭 (순위 보기 / 업적 보기) ─────────────────
+   시트를 두 장으로 나누지 않고 한 장 안에서 갈라요. 닫기 버튼도 하나면 되고,
+   보던 자리에서 바로 넘어가니 "다른 화면으로 들어갔다"는 느낌이 안 나요. */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 14px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+}
+.tab {
+  flex: 1;
+  padding: 8px 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.tab.is-on {
+  background: rgba(95, 208, 255, 0.18);
+  color: #9fe4ff;
+}
+
+/* ── 업적 ───────────────────────────────────── */
+/*
+  연습 비행 직후에만 뜨는 안내 띠.
+  "여기서 받아가세요" → (받으면) "다른 업적도 있어요"로 문구가 바뀌고,
+  받고 난 뒤에는 재촉하는 색(노랑)을 빼서 차분하게 가라앉혀요.
+*/
+.achv-guide {
+  margin-top: 14px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: rgba(95, 208, 255, 0.16);
+  border: 1px solid rgba(127, 230, 255, 0.5);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #cdf3ff;
+}
+/* 보상을 받고 나면 재촉할 이유가 없어요. 같은 계열로 두되 한 톤 가라앉혀요. */
+.achv-guide.is-done {
+  background: rgba(95, 208, 255, 0.08);
+  border-color: rgba(95, 208, 255, 0.22);
+  color: rgba(159, 228, 255, 0.75);
+}
+
+.achv-count {
+  margin: 14px 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(159, 228, 255, 0.85);
+}
+/*
+  업적은 개수가 적고 고정돼 있어서 안쪽에 따로 스크롤을 두지 않아요.
+  시트(.panel-wide)가 이미 스크롤되는데 그 안에 또 스크롤 영역을 만들면
+  손가락이 어느 쪽을 미는지 헷갈려요.
+*/
+.achv-list {
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.achv-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 12px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid transparent;
+  text-align: left;
+}
+/* 획득한 것만 색이 들어와요. 못 얻은 건 회색으로 가라앉혀서 한눈에 갈려요. */
+.achv-row.is-on {
+  background: rgba(95, 208, 255, 0.11);
+  border-color: rgba(95, 208, 255, 0.28);
+}
+/*
+  업적 아이콘 — 이모지가 아니라 직접 그린 선 아이콘이에요. (main.js의 ACHV_ICON)
+  모양 버튼(.shape-btn)과 같은 굵기·같은 라운드 처리를 써서, 한 앱에서 나온
+  아이콘처럼 보이게 맞췄어요. 색은 currentColor라 획득 여부만 바꾸면 따라와요.
+*/
+.achv-icon {
+  flex: 0 0 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.34);
+}
+.achv-icon svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.achv-row.is-on .achv-icon {
+  background: rgba(95, 208, 255, 0.18);
+  color: #7fdcff;
+}
+.achv-text { flex: 1; min-width: 0; }
+.achv-name {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 2px;
+}
+.achv-row.is-on .achv-name { color: #fff; }
+.achv-desc {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.42);
+}
+.achv-row.is-on .achv-desc { color: rgba(255, 255, 255, 0.62); }
+.achv-mark {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.28);
+}
+.achv-row.is-on .achv-mark { color: #5fd0ff; }
+
+/*
+  받기 버튼 — 「달성」 바로 옆에 붙어요.
+
+  글씨로 "보석 100개 받기"라고 길게 쓰면 줄을 다 잡아먹고 이름이 밀려요.
+  지갑에 있는 것과 **똑같은 보석 그림**을 앞에 두면 「보석」 두 글자가 필요 없고,
+  "이게 저 지갑으로 들어간다"까지 같이 읽혀요.
+
+  색은 지갑과 같은 푸른 계열이에요. 예전엔 금색이었는데, 화면에서 노랑은
+  경고(붕괴 궤도 · 위험 배너)가 쓰는 색이라 자꾸 그쪽으로 읽혔어요.
+*/
+.achv-claim {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px 7px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(127, 230, 255, 0.62);
+  background: linear-gradient(180deg, rgba(95, 208, 255, 0.28), rgba(95, 208, 255, 0.15));
+  color: #d5f7ff;
+  font-size: 11.5px;
+  font-weight: 800;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  animation: claim-pulse 1.7s ease-in-out infinite;
+}
+.achv-claim::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 13px;
+  height: 11.5px;
+  background: var(--gem-svg) center / contain no-repeat;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+}
+.achv-claim:active { transform: scale(0.96); }
+
+/* 안 받은 보상이 남아 있다는 신호 — 숨 쉬듯 옅게 빛나요. */
+@keyframes claim-pulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(95, 208, 255, 0); }
+  50%      { box-shadow: 0 0 16px rgba(95, 208, 255, 0.45); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .achv-claim { animation: none; }
+}
+
+.achv-claimed {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(127, 230, 255, 0.5);
+}
+
+/* 「달성」과 버튼이 나란히 서니까 사이를 조금 띄워요. */
+.achv-row.has-claim { gap: 9px; }
+.achv-row.has-claim .achv-mark { margin-right: 1px; }
+
 /* ── 설정 ───────────────────────────────────── */
 .field {
   margin: 18px 0;
@@ -514,6 +1180,26 @@ html, body {
 }
 .field-msg.is-error { color: #ff8fa8; }
 .field-msg.is-ok { color: #7dffb0; }
+
+/*
+  계정 초기화 확인 — 설정 시트 **위에** 떠야 해요.
+
+  .screen들은 z-index가 없어서 HTML에 적힌 순서대로 쌓여요. 이 화면은 설정보다
+  앞에 있어서 그대로 두면 시트 뒤에 깔립니다. 순서를 옮기는 대신 값을 주는 건,
+  나중에 누가 HTML 순서를 바꿔도 이 규칙이 안 깨지게 하려는 거예요.
+  (업적 토스트 30 · 튜토리얼 힌트 28보다는 아래 — 그건 알림이라 항상 맨 위예요)
+*/
+#screen-wipe { z-index: 26; }
+
+/*
+  되돌릴 수 없는 설정 칸. 소리·닉네임처럼 언제든 되돌리는 것들과 같은 줄에 있으면
+  손이 미끄러져요. 위쪽에 선을 하나 더 긋고 라벨 색으로 성격을 바꿔둡니다.
+*/
+.field-danger {
+  border-top: 1px solid rgba(255, 122, 138, 0.22);
+  padding-top: 16px;
+}
+.field-danger .field-label { color: rgba(255, 159, 174, 0.75); }
 
 .input {
   flex: 1;
@@ -616,10 +1302,106 @@ html, body {
 .over-gems b { font-weight: 800; }
 
 /* ── 토스트 ─────────────────────────────────── */
+/* ── 업적 달성 알림 ───────────────────────────
+   화면 위에서 내려왔다가 스스로 올라가며 사라져요.
+
+   폭은 내용에 맞춰 늘어나요(width: max-content). 예전엔 264px로 좁게 묶어뒀는데
+   「나는야 프로그래머」처럼 이름이 긴 업적이 …로 잘려서 풀었어요. 화면 양옆으로
+   16px씩만 남기면 어떤 이름이든 한 줄에 다 들어가요. 잠깐(2.9초) 떴다 사라지는
+   알림이라 그동안 일시정지 버튼을 살짝 덮는 건 괜찮아요.
+   손가락이 닿아도 게임이 눌리지 않게 pointer-events는 꺼둡니다. */
+.achv-toast {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--sa-top) + var(--navbar-h) + 8px);
+  z-index: 30; /* 게임오버·클리어 화면 위에도 떠야 해요 */
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /*
+    내용에 맞춰 줄어들되(max-content), **너무 줄어들지는 않게** 최소 폭을 줘요.
+
+    아이콘 옆에 세 줄(무엇을 · 이름 · 보상)이 들어가는 알림이라, 글자에 딱 맞춰
+    감싸면 230px짜리 홀쭉한 딱지가 돼요. 세로로는 긴데 가로로는 좁아서
+    "잘린 것 같다"고 읽혀요. 바닥을 깔아두면 어떤 문구가 와도 배너처럼 보여요.
+    좁은 기기에서는 min()이 화면 폭에 양보해요.
+  */
+  width: max-content;
+  min-width: min(316px, calc(100% - var(--sa-left) - var(--sa-right) - 32px));
+  max-width: calc(100% - var(--sa-left) - var(--sa-right) - 32px);
+  padding: 12px 16px 12px 12px;
+  border-radius: 14px;
+  background: rgba(12, 16, 34, 0.94);
+  border: 1px solid rgba(95, 208, 255, 0.34);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55), 0 0 20px rgba(95, 208, 255, 0.12);
+  pointer-events: none;
+  animation: achv-drop 2.9s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+
+@keyframes achv-drop {
+  0%   { opacity: 0; transform: translate(-50%, -18px) scale(0.94); }
+  8%   { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  88%  { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -14px) scale(0.97); }
+}
+
+.achv-toast-icon {
+  flex: 0 0 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: rgba(95, 208, 255, 0.18);
+  color: #7fdcff;
+}
+/* 업적 목록의 아이콘과 같은 규격이에요. (main.js makeIcon) */
+.achv-toast-icon svg {
+  display: block;
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.achv-toast-text { min-width: 0; }
+.achv-toast-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: rgba(143, 227, 255, 0.85);
+}
+/* 아주 좁은 화면에서 그래도 넘치면 자르지 말고 줄을 바꿔요.
+   keep-all이라 한글은 어절 중간이 아니라 띄어쓰기에서 접혀요. */
+.achv-toast-name {
+  margin-top: 1px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+/* 보상 안내도 보석과 같은 푸른 계열로. (노랑은 화면에서 경고가 쓰는 색이에요) */
+.achv-toast-reward {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: #9fe4ff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .achv-toast { animation: fade-in 0.2s ease-out; }
+}
+
 .toast {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--sa-bottom) + 78px);
+  /* 우측 하단 모양 버튼 줄(약 56px)보다 위에 떠야 겹치지 않아요. */
+  bottom: calc(var(--sa-bottom-ui) + 110px);
   transform: translateX(-50%);
   max-width: 82vw;
   padding: 11px 16px;
@@ -628,5 +1410,9 @@ html, body {
   font-size: 13px;
   line-height: 1.4;
   text-align: center;
+  /* 줄바꿈이 든 메시지(QA의 user_key 안내)도 그대로 보여줘요. */
+  white-space: pre-line;
+  /* user_key처럼 긴 해시가 화면 밖으로 안 삐져나가게 */
+  overflow-wrap: anywhere;
   animation: fade-in 0.2s ease-out;
 }

@@ -54,6 +54,8 @@ export const audio = {
   bgmToEcho: null,
 
   _bgmOn: false,
+  /** 울리고 있는 경보 사이렌 노드 묶음 (스토리 모드) — 없으면 null */
+  _siren: null,
   _timer: null,
   _next: 0,
   _step: 0,
@@ -371,6 +373,108 @@ export const audio = {
     this.play(1174, 0.1, 'sine', 0.09, 0, 0.5, 0.35);
     setTimeout(() => this.play(1568, 0.22, 'sine', 0.08, 0, 0.65, 0.45), 60);
     setTimeout(() => this.play(2349, 0.3, 'sine', 0.04, 0, 0.8, 0.5), 120);
+  },
+
+  /* ───────────────── 스토리 모드 (2.0) */
+
+  /**
+   * 경보 사이렌 — "위잉 위잉".
+   *
+   * 두 개의 톱니파를 LFO로 함께 흔들어서 아날로그 경보기처럼 들리게 해요.
+   * 한 번 켜면 `sirenStop()`을 부를 때까지 계속 울리므로,
+   * 장면을 빠져나갈 때 **반드시 꺼주세요.** (안 그러면 홈에 와서도 계속 울어요)
+   */
+  sirenStart(vol = 0.055) {
+    if (!this._canSfx() || this._siren) return;
+    const t = this.ctx.currentTime;
+
+    const out = this.ctx.createGain();
+    out.gain.setValueAtTime(0.0001, t);
+    out.gain.exponentialRampToValueAtTime(vol, t + 0.5);
+    out.connect(this.sfxGain);
+    this._send(out, 0.5, 0.12);
+
+    // 사이렌의 "위이잉" — 0.9초 주기로 오르내리는 느린 흔들림
+    const lfo = this.ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 1.1;
+    const lfoAmt = this.ctx.createGain();
+    lfoAmt.gain.value = 190;
+    lfo.connect(lfoAmt);
+
+    const voices = [];
+    for (const [freq, type, level] of [[560, 'sawtooth', 0.5], [281, 'square', 0.28]]) {
+      const o = this.ctx.createOscillator();
+      o.type = type;
+      o.frequency.value = freq;
+      lfoAmt.connect(o.frequency);
+      const g = this.ctx.createGain();
+      g.gain.value = level;
+      o.connect(g);
+      g.connect(out);
+      o.start(t);
+      voices.push(o);
+    }
+
+    lfo.start(t);
+    this._siren = { out, lfo, voices };
+  },
+
+  sirenStop() {
+    const s = this._siren;
+    if (!s) return;
+    this._siren = null;
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    s.out.gain.cancelScheduledValues(t);
+    s.out.gain.setValueAtTime(Math.max(0.0001, s.out.gain.value), t);
+    s.out.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+    // 페이드가 끝난 뒤에 멈춰요. 바로 stop하면 "툭" 하고 끊겨요.
+    for (const o of s.voices) o.stop(t + 0.4);
+    s.lfo.stop(t + 0.4);
+  },
+
+  /** 아군 기총 — 짧고 건조하게. 초당 여러 발이라 잔향을 거의 안 줘요. */
+  laser() {
+    this.play(1250, 0.055, 'square', 0.035, -620, 0.05, 0);
+  },
+
+  /** 적에게 명중 */
+  ping() {
+    this.play(2100, 0.04, 'square', 0.028, -400, 0.1, 0);
+  },
+
+  /**
+   * 폭발. size가 클수록 낮고 길게 울려요.
+   * @param {number} [size] 0.5(잔해) ~ 1.6(보스)
+   */
+  boom(size = 1) {
+    const s = clamp(size, 0.4, 2);
+    this.noise(0.3 * s, 0.1 * s, 900 / s);
+    this.play(120 / s, 0.4 * s, 'sawtooth', 0.09 * s, -70, 0.4, 0.1);
+  },
+
+  /** 피격 — 아프게 들려야 해요 */
+  hurt() {
+    this.play(180, 0.22, 'square', 0.11, -110, 0.2, 0);
+    this.noise(0.2, 0.09, 1800);
+  },
+
+  /** 보스 등장 경고음 (삐— 삐— 삐—) */
+  alert() {
+    for (let i = 0; i < 3; i++) {
+      setTimeout(() => this.play(880, 0.16, 'square', 0.08, 0, 0.3, 0.2), i * 260);
+    }
+  },
+
+  /** 조준 레이저 예고 — 점점 조여드는 소리 */
+  charge(dur = 1) {
+    this.play(220, dur, 'sawtooth', 0.06, 1400, 0.3, 0.1);
+  },
+
+  /** 스토리 대사 한 글자 — 아주 작게 톡톡 */
+  blip() {
+    this.play(1400 + Math.random() * 260, 0.022, 'square', 0.012, 0, 0, 0);
   },
 
   /* ───────────────── 배경음 */

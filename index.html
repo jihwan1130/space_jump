@@ -4,12 +4,57 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <meta name="theme-color" content="#05060f" />
-<title>SPACE JUMP</title>
+<title>궤도탈출</title>
 <link rel="stylesheet" href="./src/style.css" />
 </head>
 <body>
+  <!--
+    첫 진입 화면. 배경 아트가 화면을 꽉 채워요.
+    준비가 끝나면(늦어도 2.5초) 진행 막대가 메뉴로 바뀌고,
+    "게임하기"를 눌러야 게임이 시작돼요.
+  -->
+  <div id="loading" class="loading">
+    <img class="loading-bg" src="./src/loading-bg.jpg" alt="" fetchpriority="high" />
+
+    <div class="loading-body">
+      <h1 class="loading-title">궤도<span>탈출</span></h1>
+      <p class="loading-sub"><i class="rule"></i><span>ORBIT JUMP</span><i class="rule"></i></p>
+
+      <!-- 준비되는 동안 -->
+      <div id="loading-progress" class="loading-progress">
+        <div class="loading-bar"><i></i></div>
+        <p class="loading-hint">우주를 준비하는 중…</p>
+      </div>
+
+      <!-- 준비가 끝나면 이 메뉴로 바뀌어요 -->
+      <div id="loading-menu" class="loading-menu is-hidden">
+        <button id="btn-play" class="btn btn-primary" type="button">게임하기</button>
+        <button id="btn-story" class="btn btn-ghost" type="button">스토리 모드</button>
+        <p id="loading-note" class="loading-note" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+  </div>
+
+  <!--
+    하단 배너 광고 (앱인토스).
+
+    게임 캔버스와 오버레이 UI는 이 띠 높이만큼 위에서 끝나요. 광고 위에 게임이
+    겹치면 오터치가 나고 심사에서도 걸려요. (게임 출시 가이드: 배너는 상단 또는 하단)
+    #ad-banner-slot 안은 **비워둬야** 해요 — SDK가 직접 채웁니다.
+  -->
+  <div id="ad-banner" class="ad-banner is-hidden">
+    <div id="ad-banner-slot" class="ad-banner-slot"></div>
+  </div>
+
   <!-- 게임 화면 -->
   <canvas id="game"></canvas>
+
+  <!--
+    스토리 모드 전용 캔버스 (2.0).
+    본편 캔버스 위에 불투명하게 덮여요. 스토리를 안 볼 때는 display:none이라
+    본편 성능에는 아무 영향이 없어요.
+  -->
+  <canvas id="story" class="is-hidden"></canvas>
 
   <!-- 게임 위에 얹히는 UI. 게임 중에는 포인터 이벤트를 통과시켜요. -->
   <div id="ui" class="ui">
@@ -20,13 +65,17 @@
       버튼은 사각형 안에 아이콘을 넣은 게 아니라 **테두리 자체가 그 모양**이에요.
     -->
     <div id="home" class="home">
+      <!-- 둘 다 눌러서 바로 갈 수 있어요. 닉네임 → 설정(이름 바꾸기), 보석 → 상점 -->
       <div class="home-top">
-        <b id="home-nick">우주미아0000</b>
-        <span id="home-wallet" class="wallet">0</span>
+        <button id="home-nick" class="home-chip" type="button" aria-label="닉네임 바꾸기">우주미아0000</button>
+        <button id="home-wallet" class="wallet wallet-btn" type="button" aria-label="상점 열기">0</button>
       </div>
 
       <div class="home-center">
-        <h1 class="logo">SPACE<span>JUMP</span></h1>
+        <h1 class="logo">
+          <span class="logo-main">궤도<span class="accent">탈출</span></span>
+          <span class="logo-sub"><i class="rule"></i><span>ORBIT JUMP</span><i class="rule"></i></span>
+        </h1>
         <p class="home-record">
           최고 <b id="home-best">0</b><i></i>콤보 <b id="home-combo">x0</b>
         </p>
@@ -34,30 +83,45 @@
       </div>
 
       <div class="home-tools">
-        <button id="btn-settings" class="shape-btn" type="button" aria-label="설정">
+        <button id="home-story" class="shape-btn" type="button" aria-label="스토리 모드">
+          <!-- 말풍선 — 다른 아이콘과 같은 3~21(18단위) 안에 들어가요. -->
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M9.71 1.24 L14.29 1.24 L14.29 4.02 L16.02 4.74 L17.99 2.77 L21.23 6.01 L19.26 7.98 L19.98 9.71 L22.76 9.71 L22.76 14.29 L19.98 14.29 L19.26 16.02 L21.23 17.99 L17.99 21.23 L16.02 19.26 L14.29 19.98 L14.29 22.76 L9.71 22.76 L9.71 19.98 L7.98 19.26 L6.01 21.23 L2.77 17.99 L4.74 16.02 L4.02 14.29 L1.24 14.29 L1.24 9.71 L4.02 9.71 L4.74 7.98 L2.77 6.01 L6.01 2.77 L7.98 4.74 L9.71 4.02 Z" />
-            <circle cx="12" cy="12" r="3.6" />
+            <path d="M4 6.6a3.1 3.1 0 0 1 3.1-3.1h9.8A3.1 3.1 0 0 1 20 6.6v7.5a3.1 3.1 0 0 1-3.1 3.1h-5.2L7.6 21v-3.8h-.5A3.1 3.1 0 0 1 4 14.1z" />
+            <path d="M8.6 10.4h6.8" />
+            <path d="M8.6 13.4h4.2" />
+          </svg>
+          <span class="shape-label">스토리</span>
+        </button>
+
+        <button id="btn-settings" class="shape-btn" type="button" aria-label="설정">
+          <!-- 세 아이콘 모두 24 뷰박스 안에서 3~21 (=18단위)을 쓰도록 맞췄어요. -->
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M10.09 3 L13.91 3 L13.91 5.33 L15.36 5.93 L17.01 4.28 L19.72 6.99 L18.07 8.64 L18.67 10.09 L21 10.09 L21 13.91 L18.67 13.91 L18.07 15.36 L19.72 17.01 L17.01 19.72 L15.36 18.07 L13.91 18.67 L13.91 21 L10.09 21 L10.09 18.67 L8.64 18.07 L6.99 19.72 L4.28 17.01 L5.93 15.36 L5.33 13.91 L3 13.91 L3 10.09 L5.33 10.09 L5.93 8.64 L4.28 6.99 L6.99 4.28 L8.64 5.93 L10.09 5.33 Z" />
+            <circle cx="12" cy="12" r="3.01" />
           </svg>
           <span class="shape-label">설정</span>
         </button>
 
         <button id="btn-shop" class="shape-btn" type="button" aria-label="상점">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <!-- 옆면을 곧게 세워요. 아래로 좁아지면 쓰레기통처럼 보여요. -->
-            <path d="M3.4 8.6h17.2v10.9a2 2 0 0 1-2 2H5.4a2 2 0 0 1-2-2z" />
-            <path d="M8.6 8.6V6.9a3.4 3.4 0 0 1 6.8 0v1.7" />
+            <!--
+              옆면을 곧게 세워요. 아래로 좁아지면 쓰레기통처럼 보여요.
+              가로로 꽉 채우면 큰 사각형이라 톱니바퀴·트로피보다 무겁게 읽혀서,
+              높이만 18로 맞추고 폭은 15로 좁혔어요. (장바구니는 세로로 긴 게 자연스러워요)
+            -->
+            <path d="M4.5 7.5h15v11.5a2 2 0 0 1-2 2H6.5a2 2 0 0 1-2-2z" />
+            <path d="M8.8 7.5V6.2a3.2 3.2 0 0 1 6.4 0v1.3" />
           </svg>
           <span class="shape-label">상점</span>
         </button>
 
         <button id="btn-rank" class="shape-btn" type="button" aria-label="랭킹">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M6.2 2.9h11.6v6.2a5.8 5.8 0 0 1-11.6 0z" />
-            <path d="M6.2 4.4H2.9a3.3 3.3 0 0 0 3.4 3.9" />
-            <path d="M17.8 4.4h3.3a3.3 3.3 0 0 1-3.4 3.9" />
-            <path d="M12 14.4v2.6" />
-            <path d="M7.6 20.8h8.8l-1.2-3.8H8.8z" />
+            <path d="M6.2 3h11.6v6.2a5.8 5.8 0 0 1-11.6 0z" />
+            <path d="M6.2 4.5H3a3.3 3.3 0 0 0 3.4 3.9" />
+            <path d="M17.8 4.5h3.2a3.3 3.3 0 0 1-3.4 3.9" />
+            <path d="M12 14.5v2.6" />
+            <path d="M7.6 21h8.8l-1.2-3.8H8.8z" />
           </svg>
           <span class="shape-label">랭킹</span>
         </button>
@@ -72,6 +136,7 @@
       </svg>
     </button>
 
+
     <!-- 게임 오버 -->
     <section id="screen-over" class="screen is-hidden">
       <div class="panel">
@@ -84,6 +149,95 @@
         <button id="btn-revive" class="btn btn-reward is-hidden" type="button">광고보고 부활하기</button>
         <button id="btn-retry" class="btn btn-primary" type="button">재도전하기</button>
         <button id="btn-home-over" class="btn btn-ghost" type="button">홈으로 이동</button>
+      </div>
+    </section>
+
+    <!-- ── 스토리 모드 결과 ─────────────────────
+         스테이지를 깼을 때. 다음 화 예고까지 여기서 보여줘요. -->
+    <section id="screen-story-clear" class="screen is-hidden">
+      <div class="panel">
+        <p class="story-eyebrow">STAGE 1 · 지구 → 달</p>
+        <h2 class="story-clear-title">달에 내려앉았다</h2>
+        <div class="over-score"><b id="story-score">0</b><span>점</span></div>
+        <p class="story-next">
+          하지만 셀레네 기지의 불은 모두 꺼져 있었다.<br />
+          <b>STAGE 2 「고요의 바다」</b> 는 다음 업데이트에서 이어집니다.
+        </p>
+        <button id="btn-story-again" class="btn btn-primary" type="button">다시 보기</button>
+        <button id="btn-story-home" class="btn btn-ghost" type="button">홈으로 이동</button>
+      </div>
+    </section>
+
+    <!-- 격추당했을 때 -->
+    <section id="screen-story-fail" class="screen is-hidden">
+      <div class="panel">
+        <p class="over-reason">기체 손상 · 임무 중단</p>
+        <div class="over-score"><b id="story-fail-score">0</b><span>점</span></div>
+        <p class="over-detail">지구는 이미 등 뒤에 있어요. 돌아갈 곳은 없습니다.</p>
+        <button id="btn-story-retry" class="btn btn-primary" type="button">다시 도전하기</button>
+        <button id="btn-story-fail-home" class="btn btn-ghost" type="button">홈으로 이동</button>
+      </div>
+    </section>
+
+    <!-- ── 엔딩 ─────────────────────────────
+         행성 100개를 지나 최종 보스 「가디언-00」까지 격파했을 때. -->
+    <section id="screen-final-clear" class="screen is-hidden">
+      <div class="panel">
+        <p class="story-eyebrow">FINAL · 관문 돌파</p>
+        <h2 class="story-clear-title">태양계를 벗어났다</h2>
+        <div class="over-score"><b id="final-score">0</b><span>점</span></div>
+        <p id="final-detail" class="over-detail">행성 100/100 통과</p>
+        <p id="final-gems" class="over-gems is-hidden">보석 <b>0</b>개 획득</p>
+        <p class="story-next">
+          관문 너머는 아직 아무도 가보지 못한 곳이에요.<br />
+          <b>다음 항로</b>는 업데이트에서 이어집니다.
+        </p>
+        <button id="btn-final-again" class="btn btn-primary" type="button">처음부터 다시</button>
+        <button id="btn-final-home" class="btn btn-ghost" type="button">홈으로 이동</button>
+      </div>
+    </section>
+
+    <!-- 최종 보스에게 격추당했을 때 — 100행성 기록은 남기고 보스만 다시 -->
+    <section id="screen-final-fail" class="screen is-hidden">
+      <div class="panel">
+        <p class="over-reason">기체 손상 · 관문 돌파 실패</p>
+        <div class="over-score"><b id="final-fail-score">0</b><span>점</span></div>
+        <p id="final-fail-detail" class="over-detail">행성 100/100까지 왔어요. 관문만 남았습니다.</p>
+        <button id="btn-final-retry" class="btn btn-primary" type="button">관문 재도전</button>
+        <button id="btn-final-giveup" class="btn btn-ghost" type="button">홈으로 이동</button>
+      </div>
+    </section>
+
+    <!-- ── 튜토리얼 안내 카드 ─────────────────
+         스토리 모드의 대사창을 빌려왔지만 등장인물이 없어요. 설명만 뜨고
+         아무 데나 탭하면 닫힙니다. 떠 있는 동안 게임 시간은 멈춰 있어요. -->
+    <section id="screen-tutorial" class="screen screen-tip is-hidden">
+      <div class="tip-card">
+        <p id="tip-step" class="tip-step">1 / 10</p>
+        <h2 id="tip-title" class="tip-title">화면을 탭하면 발사돼요</h2>
+        <p id="tip-body" class="tip-body"></p>
+        <button id="btn-tip-next" class="btn btn-primary" type="button">알겠어요</button>
+        <button id="btn-tip-skip" class="btn btn-quiet" type="button">튜토리얼 건너뛰기</button>
+      </div>
+    </section>
+
+    <!--
+      튜토리얼 코칭 힌트 — 레슨 안의 자잘한 안내예요.
+      모달이 아니라 위에 잠깐 떴다 스스로 사라져요. 게임은 계속 돌아갑니다.
+      업적 토스트와 같은 자리를 쓰지만 둘이 같이 뜰 일은 없어요.
+      (연습 비행에서는 업적이 안 열려요)
+    -->
+    <div id="tutorial-hint" class="tutorial-hint is-hidden" role="status" aria-live="polite"></div>
+
+    <!-- 튜토리얼 완료 -->
+    <section id="screen-tutorial-clear" class="screen is-hidden">
+      <div class="panel panel-sm">
+        <h2 class="panel-title">연습 비행 완료</h2>
+        <p id="tutorial-clear-desc" class="panel-desc">
+          관문지기까지 넘으셨어요. 이제 진짜 우주로 나갈 차례예요.
+        </p>
+        <button id="btn-tutorial-go" class="btn btn-primary" type="button">보상 받으러 가기</button>
+        <button id="btn-tutorial-home" class="btn btn-ghost" type="button">나중에 받을게요</button>
       </div>
     </section>
 
@@ -107,6 +261,22 @@
       </div>
     </section>
 
+    <!-- ── 계정 초기화 확인 ─────────────────────
+         되돌릴 수 없는 동작이라 무엇이 사라지는지 하나씩 적어서 보여줘요.
+         기본 버튼은 「취소」예요. 위험한 쪽이 손에 먼저 닿으면 안 되니까요. -->
+    <section id="screen-wipe" class="screen is-hidden">
+      <div class="panel panel-sm">
+        <h2 class="panel-title">정말 초기화할까요?</h2>
+        <p class="panel-desc">
+          보석 · 우주선 · 최고 기록 · 업적 · 연습 비행 기록이<br />
+          <b>전부 사라지고 되돌릴 수 없어요.</b>
+        </p>
+        <p id="wipe-msg" class="field-msg" role="status" aria-live="polite"></p>
+        <button id="btn-wipe-cancel" class="btn btn-primary" type="button">취소</button>
+        <button id="btn-wipe-confirm" class="btn btn-danger" type="button">초기화하기</button>
+      </div>
+    </section>
+
     <!-- ── 상점 ─────────────────────────────── -->
     <section id="screen-shop" class="screen is-hidden">
       <div class="panel panel-wide no-bar">
@@ -120,15 +290,37 @@
       </div>
     </section>
 
-    <!-- ── 랭킹 대시보드 ────────────────────── -->
+    <!-- ── 랭킹 · 업적 대시보드 ─────────────────
+         한 시트 안에서 「순위 보기 / 업적 보기」 탭으로 갈라져요. -->
     <section id="screen-rank" class="screen is-hidden">
       <div class="panel panel-wide no-bar">
         <div class="sheet-head">
-          <h2 class="panel-title">랭킹</h2>
+          <h2 class="panel-title">기록</h2>
           <span id="rank-mine" class="rank-mine"></span>
         </div>
-        <div id="rank-list" class="rank-list no-bar"></div>
-        <button id="btn-rank-toss" class="btn btn-ghost is-hidden" type="button">토스 게임센터 랭킹</button>
+
+        <div class="tabs" role="tablist">
+          <button id="tab-rank" class="tab is-on" type="button" role="tab">순위 보기</button>
+          <button id="tab-achv" class="tab" type="button" role="tab">업적 보기</button>
+        </div>
+
+        <!-- 순위 -->
+        <div id="pane-rank" class="tab-pane">
+          <div id="rank-list" class="rank-list no-bar"></div>
+          <button id="btn-rank-toss" class="btn btn-ghost is-hidden" type="button">토스 게임센터 랭킹</button>
+        </div>
+
+        <!-- 업적 -->
+        <div id="pane-achv" class="tab-pane is-hidden">
+          <!--
+            연습 비행을 막 끝낸 사람에게만 뜨는 안내예요.
+            보석을 받기 전에는 "받아가세요", 받고 나면 "다른 업적도 있어요"로 바뀌어요.
+          -->
+          <p id="achv-guide" class="achv-guide is-hidden" role="status" aria-live="polite"></p>
+          <p id="achv-count" class="achv-count">0 / 0 달성</p>
+          <div id="achv-list" class="achv-list no-bar"></div>
+        </div>
+
         <button id="btn-rank-close" class="btn btn-primary" type="button">닫기</button>
       </div>
     </section>
@@ -175,6 +367,30 @@
           <input id="range-vol" class="range" type="range" min="0" max="100" step="5" value="80" />
         </div>
 
+        <!--
+          튜토리얼 다시보기 — 한 번 깬 사람도 조작이 헷갈릴 때가 있어요.
+          기록·보석·업적은 그대로 두고 연습 코스만 한 번 더 돌아요.
+        -->
+        <div class="field">
+          <span class="field-label">튜토리얼</span>
+          <button id="btn-tutorial-replay" class="btn btn-ghost" type="button">튜토리얼 다시보기</button>
+          <p class="field-msg">
+            조작 · 소행성 · 블랙홀 연습 코스를 처음부터 다시 해봐요. 기록에는 남지 않아요.
+          </p>
+        </div>
+
+        <!--
+          계정 초기화 — 되돌릴 수 없는 동작이라 다른 설정과 줄을 그어 떼어놨어요.
+          누르면 바로 지우지 않고 확인 화면(screen-wipe)을 한 번 거칩니다.
+        -->
+        <div class="field field-danger">
+          <span class="field-label">계정</span>
+          <button id="btn-wipe" class="btn btn-danger-ghost" type="button">계정 초기화</button>
+          <p class="field-msg">
+            보석 · 우주선 · 기록 · 업적을 모두 지우고 처음 상태로 되돌려요.
+          </p>
+        </div>
+
         <p id="sync-msg" class="field-msg"></p>
         <button id="btn-settings-close" class="btn btn-primary" type="button">닫기</button>
       </div>
@@ -182,6 +398,20 @@
 
     <!-- 광고 로딩 등 짧은 대기 -->
     <div id="toast" class="toast is-hidden"></div>
+
+    <!--
+      업적 달성 알림 — 화면 위에서 내려왔다가 스스로 사라져요.
+      일반 토스트(아래쪽)와 자리를 나눠야 둘이 같이 떠도 안 겹쳐요.
+      폭은 업적 이름 길이에 맞춰 늘어나요. (style.css .achv-toast)
+    -->
+    <div id="achv-toast" class="achv-toast is-hidden" role="status" aria-live="polite">
+      <span id="achv-toast-icon" class="achv-toast-icon"></span>
+      <div class="achv-toast-text">
+        <p class="achv-toast-label">업적을 클리어했습니다</p>
+        <p id="achv-toast-name" class="achv-toast-name"></p>
+        <p id="achv-toast-reward" class="achv-toast-reward is-hidden"></p>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="./src/main.js"></script>

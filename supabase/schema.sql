@@ -120,3 +120,34 @@ drop trigger if exists players_keep_best on public.players;
 create trigger players_keep_best
   before update on public.players
   for each row execute function public.keep_best();
+
+-- ────────────────────────────── 계정 초기화 (설정 화면의 「계정 초기화」)
+--
+-- 왜 `grant delete`가 아니라 함수냐면 —
+--   delete 권한을 anon에게 열면 그 키를 가진 누구든 `delete from players` 한 줄로
+--   **표 전체를 비울 수 있어요.** 되돌릴 방법이 없는 종류의 사고예요.
+--   함수로 감싸면 anon이 할 수 있는 건 "user_key 하나짜리 삭제" 딱 그것뿐이에요.
+--
+-- security definer라 함수 주인(postgres) 권한으로 돌아가요. 그래서 anon에게
+-- 표 자체의 delete 권한을 주지 않고도 이 함수 안에서만 지울 수 있어요.
+-- search_path를 고정하는 건 security definer 함수의 기본 안전 수칙이에요.
+-- (안 하면 호출하는 쪽이 search_path를 바꿔서 엉뚱한 표를 가리키게 만들 수 있어요)
+--
+-- ⚠️ 이 게임은 로그인이 없어서, user_key를 아는 사람은 그 계정을 지울 수 있어요.
+--    지금도 프로필 update가 같은 수준으로 열려 있으니 새로 생기는 구멍은 아니에요.
+--    다만 "표 전체"와 "한 계정"의 차이는 커서, 그 선만큼은 함수로 그어둡니다.
+--
+-- players 한 줄을 지우면 runs · achievements · tutorial_progress는
+-- on delete cascade로 따라서 지워져요.
+create or replace function public.delete_account(p_user_key text)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  delete from public.players where user_key = p_user_key;
+$$;
+
+-- 기본으로 모두에게 열려버리는 걸 막고, 필요한 역할에만 다시 줘요.
+revoke all on function public.delete_account(text) from public;
+grant execute on function public.delete_account(text) to anon, authenticated;

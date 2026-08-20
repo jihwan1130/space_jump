@@ -14,6 +14,7 @@ import {
   Screen,
   Storage,
   SafeAreaInsets,
+  TossAds,
   getAppsInTossGlobals,
   getUserKeyForGame,
   graniteEvent,
@@ -21,7 +22,12 @@ import {
   showFullScreenAd,
 } from '@apps-in-toss/web-framework';
 
-import { REWARD_AD_GROUP_ID, SAVE_KEY } from './config.js';
+import {
+  BANNER_AD_GROUP_ID,
+  INTERSTITIAL_AD_GROUP_ID,
+  REWARD_AD_GROUP_ID,
+  SAVE_KEY,
+} from './config.js';
 
 /* ────────────────────────────── 환경 판별 */
 
@@ -295,148 +301,256 @@ export function onVisibility(onHide, onShow) {
  */
 const MOCK_AD = !isInToss && Boolean(import.meta.env?.DEV);
 
-export const rewardAd = {
-  loaded: false,
-  loading: false,
-  _unload: null,
-  _waiters: [],
+/**
+ * 전면 광고 관리자를 하나 만들어요.
+ *
+ * 부활(보상형)과 게임오버 전환(전면)은 광고 그룹이 달라서 각각 따로 씁니다.
+ * 로드 상태를 따로 들고 있어야 서로의 광고를 잡아먹지 않아요.
+ */
+function createFullScreenAd(adGroupId) {
+  return {
+    adGroupId,
+    loaded: false,
+    loading: false,
+    _unload: null,
+    _waiters: [],
+
+    get available() {
+      if (MOCK_AD) return true;
+      if (!isInToss) return false;
+      return supported(loadFullScreenAd) && supported(showFullScreenAd);
+    },
+
+    /** 로드가 끝났다고 알려요. 기다리던 쪽(waitLoad)을 전부 깨워요. */
+    _settle(ok) {
+      this.loaded = ok;
+      this.loading = false;
+      const waiters = this._waiters;
+      this._waiters = [];
+      for (const w of waiters) w(ok);
+    },
+
+    /** 광고를 미리 불러와 둬요. (게임 시작 시 · 광고를 닫은 직후 호출) */
+    preload() {
+      if (!this.available || this.loaded || this.loading) return;
+      this.loading = true;
+
+      if (MOCK_AD) {
+        setTimeout(() => this._settle(true), 300);
+        return;
+      }
+
+      try {
+        this._unload?.();
+        this._unload = loadFullScreenAd({
+          options: { adGroupId: this.adGroupId },
+          onEvent: (event) => {
+            if (event?.type === 'loaded') this._settle(true);
+          },
+          onError: (error) => {
+            console.warn('[space-jump] 광고 로드 실패', error);
+            this._settle(false);
+          },
+        });
+      } catch (e) {
+        console.warn('[space-jump] 광고 로드 호출 실패', e);
+        this._settle(false);
+      }
+    },
+
+    /**
+     * 진행 중인 로드가 끝날 때까지 최대 `ms`만큼 기다려요.
+     * 게임 오버 화면에서 사용자가 이어하기를 눌렀는데 아직 로드가 안 끝났을 때만 써요.
+     * @returns {Promise<boolean>} 광고를 띄울 수 있는 상태인지
+     */
+    waitLoad(ms = 4000) {
+      if (this.loaded) return Promise.resolve(true);
+      if (!this.available) return Promise.resolve(false);
+      this.preload();
+      if (!this.loading) return Promise.resolve(this.loaded);
+
+      return new Promise((resolve) => {
+        let done = false;
+        const settle = (ok) => {
+          if (done) return;
+          done = true;
+          resolve(ok);
+        };
+        this._waiters.push(settle);
+        setTimeout(() => settle(this.loaded), ms);
+      });
+    },
+
+    /**
+     * 로드된 광고를 보여줘요.
+     * @param {{ onOpen?: () => void, onReward?: () => void, onClose?: (rewarded: boolean) => void }} handlers
+     */
+    show({ onOpen, onReward, onClose } = {}) {
+      if (!this.loaded) {
+        onClose?.(false);
+        return;
+      }
+
+      if (MOCK_AD) {
+        this.loaded = false;
+        onOpen?.();
+        setTimeout(() => {
+          onReward?.();
+          onClose?.(true);
+          setTimeout(() => this.preload(), 400);
+        }, 900);
+        return;
+      }
+
+      let rewarded = false;
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        this.loaded = false;
+        onClose?.(rewarded);
+        // 다음 광고를 미리 받아둬요. (load → show → load 패턴)
+        setTimeout(() => this.preload(), 400);
+      };
+
+      try {
+        showFullScreenAd({
+          options: { adGroupId: this.adGroupId },
+          onEvent: (event) => {
+            switch (event?.type) {
+              case 'show':
+                onOpen?.();
+                break;
+              case 'userEarnedReward':
+                rewarded = true;
+                onReward?.();
+                break;
+              case 'dismissed':
+              case 'failedToShow':
+                finish();
+                break;
+              default:
+                break;
+            }
+          },
+          onError: (error) => {
+            console.warn('[space-jump] 광고 표시 실패', error);
+            finish();
+          },
+        });
+      } catch (e) {
+        console.warn('[space-jump] 광고 표시 호출 실패', e);
+        finish();
+      }
+
+      // 일부 안드로이드 버전에서 dismissed가 오지 않는 이슈가 있어요.
+      // 앱이 포그라운드로 돌아오면 광고가 끝난 것으로 보고 정리해요.
+      const onVisible = () => {
+        if (document.hidden) return;
+        document.removeEventListener('visibilitychange', onVisible);
+        setTimeout(finish, 300);
+      };
+      setTimeout(() => document.addEventListener('visibilitychange', onVisible), 1200);
+    },
+  };
+}
+
+/** 부활용 — 보상형. 광고를 끝까지 봐야 보상(이어하기)이 나가요. */
+export const rewardAd = createFullScreenAd(REWARD_AD_GROUP_ID);
+
+/** 게임오버 전환용 — 전면. 보상이 없어서 보상형 그룹과 분리하는 걸 권해요. */
+export const interstitialAd = createFullScreenAd(INTERSTITIAL_AD_GROUP_ID);
+
+/* ────────────────────────────── 하단 배너 광고 */
+
+/**
+ * 화면 맨 아래에 붙는 띠 광고.
+ *
+ * 전면·보상형과 달리 "미리 로드했다가 보여주는" 게 아니라, DOM 요소 하나를 넘겨주면
+ * SDK가 그 안에 광고를 그리고 주기적으로 새 광고로 갈아끼워요. 우리가 할 일은
+ *   1) SDK 초기화(initialize) — 광고 스크립트를 받아와요
+ *   2) 빈 요소에 붙이기(attachBanner)
+ *   3) 화면을 벗어날 때 정리(destroy)
+ * 이 셋뿐이에요.
+ *
+ * ⚠️ 토스 앱 안에서만 붙여요. 실서비스 광고 ID를 쓰고 있어서, 개발 중인 브라우저에서
+ *    광고를 요청하면 지표가 오염되고 정책에도 어긋나요. 브라우저에서는 자리만 잡아두고
+ *    (main.js가 개발용 안내 문구를 넣어요) 실제 요청은 하지 않습니다.
+ */
+export const bannerAd = {
+  _handle: null,
+  _initialized: false,
 
   get available() {
-    if (MOCK_AD) return true;
     if (!isInToss) return false;
-    return supported(loadFullScreenAd) && supported(showFullScreenAd);
+    return supported(TossAds.initialize) && supported(TossAds.attachBanner);
   },
 
-  /** 로드가 끝났다고 알려요. 기다리던 쪽(waitLoad)을 전부 깨워요. */
-  _settle(ok) {
-    this.loaded = ok;
-    this.loading = false;
-    const waiters = this._waiters;
-    this._waiters = [];
-    for (const w of waiters) w(ok);
-  },
+  /**
+   * 배너를 요소에 붙여요. 요소 **안은 비어 있어야** 해요. (SDK가 직접 채워요)
+   *
+   * @param {HTMLElement} target 배너를 그릴 빈 컨테이너
+   * @param {{ onFail?: (reason: string) => void, onShown?: () => void }} [handlers]
+   */
+  attach(target, { onFail, onShown } = {}) {
+    if (!this.available || !target) {
+      onFail?.('unsupported');
+      return;
+    }
 
-  /** 광고를 미리 불러와 둬요. (게임 시작 시 · 광고를 닫은 직후 호출) */
-  preload() {
-    if (!this.available || this.loaded || this.loading) return;
-    this.loading = true;
+    const mount = () => {
+      try {
+        this._handle?.destroy?.();
+        this._handle = TossAds.attachBanner(BANNER_AD_GROUP_ID, target, {
+          // 우주 배경이라 항상 어두워요. auto로 두면 낮 모드 기기에서 흰 띠가 번쩍여요.
+          theme: 'dark',
+          tone: 'blackAndWhite',
+          // 화면 가로를 꽉 채우는 형태. card는 좌우 여백 + 둥근 모서리라 하단 띠에 안 맞아요.
+          variant: 'expanded',
+          callbacks: {
+            onAdRendered: () => onShown?.(),
+            onNoFill: () => onFail?.('no-fill'),
+            onAdFailedToRender: (p) => onFail?.(p?.error?.message || 'render-failed'),
+          },
+        });
+      } catch (e) {
+        console.warn('[space-jump] 배너 광고 부착 실패', e);
+        onFail?.('attach-failed');
+      }
+    };
 
-    if (MOCK_AD) {
-      setTimeout(() => this._settle(true), 300);
+    if (this._initialized) {
+      mount();
       return;
     }
 
     try {
-      this._unload?.();
-      this._unload = loadFullScreenAd({
-        options: { adGroupId: REWARD_AD_GROUP_ID },
-        onEvent: (event) => {
-          if (event?.type === 'loaded') this._settle(true);
-        },
-        onError: (error) => {
-          console.warn('[space-jump] 광고 로드 실패', error);
-          this._settle(false);
+      TossAds.initialize({
+        callbacks: {
+          onInitialized: () => {
+            this._initialized = true;
+            mount();
+          },
+          onInitializationFailed: (error) => {
+            console.warn('[space-jump] 배너 광고 SDK 초기화 실패', error);
+            onFail?.('init-failed');
+          },
         },
       });
     } catch (e) {
-      console.warn('[space-jump] 광고 로드 호출 실패', e);
-      this._settle(false);
+      console.warn('[space-jump] 배너 광고 초기화 호출 실패', e);
+      onFail?.('init-failed');
     }
   },
 
-  /**
-   * 진행 중인 로드가 끝날 때까지 최대 `ms`만큼 기다려요.
-   * 게임 오버 화면에서 사용자가 이어하기를 눌렀는데 아직 로드가 안 끝났을 때만 써요.
-   * @returns {Promise<boolean>} 광고를 띄울 수 있는 상태인지
-   */
-  waitLoad(ms = 4000) {
-    if (this.loaded) return Promise.resolve(true);
-    if (!this.available) return Promise.resolve(false);
-    this.preload();
-    if (!this.loading) return Promise.resolve(this.loaded);
-
-    return new Promise((resolve) => {
-      let done = false;
-      const settle = (ok) => {
-        if (done) return;
-        done = true;
-        resolve(ok);
-      };
-      this._waiters.push(settle);
-      setTimeout(() => settle(this.loaded), ms);
-    });
-  },
-
-  /**
-   * 로드된 광고를 보여줘요.
-   * @param {{ onOpen?: () => void, onReward?: () => void, onClose?: (rewarded: boolean) => void }} handlers
-   */
-  show({ onOpen, onReward, onClose } = {}) {
-    if (!this.loaded) {
-      onClose?.(false);
-      return;
-    }
-
-    if (MOCK_AD) {
-      this.loaded = false;
-      onOpen?.();
-      setTimeout(() => {
-        onReward?.();
-        onClose?.(true);
-        setTimeout(() => this.preload(), 400);
-      }, 900);
-      return;
-    }
-
-    let rewarded = false;
-    let finished = false;
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      this.loaded = false;
-      onClose?.(rewarded);
-      // 다음 광고를 미리 받아둬요. (load → show → load 패턴)
-      setTimeout(() => this.preload(), 400);
-    };
-
+  /** 붙여둔 배너를 걷어요. */
+  destroy() {
     try {
-      showFullScreenAd({
-        options: { adGroupId: REWARD_AD_GROUP_ID },
-        onEvent: (event) => {
-          switch (event?.type) {
-            case 'show':
-              onOpen?.();
-              break;
-            case 'userEarnedReward':
-              rewarded = true;
-              onReward?.();
-              break;
-            case 'dismissed':
-            case 'failedToShow':
-              finish();
-              break;
-            default:
-              break;
-          }
-        },
-        onError: (error) => {
-          console.warn('[space-jump] 광고 표시 실패', error);
-          finish();
-        },
-      });
-    } catch (e) {
-      console.warn('[space-jump] 광고 표시 호출 실패', e);
-      finish();
+      this._handle?.destroy?.();
+    } catch {
+      /* 이미 사라졌으면 그만이에요 */
     }
-
-    // 일부 안드로이드 버전에서 dismissed가 오지 않는 이슈가 있어요.
-    // 앱이 포그라운드로 돌아오면 광고가 끝난 것으로 보고 정리해요.
-    const onVisible = () => {
-      if (document.hidden) return;
-      document.removeEventListener('visibilitychange', onVisible);
-      setTimeout(finish, 300);
-    };
-    setTimeout(() => document.addEventListener('visibilitychange', onVisible), 1200);
+    this._handle = null;
   },
 };
 

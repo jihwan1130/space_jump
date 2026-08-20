@@ -32,7 +32,14 @@ export const cloud = {
   /** 마지막으로 확인한 연결 상태 (설정 화면에 표시해요) */
   status: 'idle', // idle | ok | offline | no-table
 
-  async _fetch(path, options = {}) {
+  /**
+   * @param {string} path PostgREST 경로
+   * @param {object} options fetch 옵션 + `optional`
+   *   `optional: true`면 이 테이블이 없어도 **연동 전체를 끄지 않아요.**
+   *   나중에 추가한 테이블(tutorial_progress처럼)은 아직 안 만든 프로젝트가 있을 수 있는데,
+   *   그것 때문에 프로필·랭킹까지 같이 죽으면 안 되니까요.
+   */
+  async _fetch(path, { optional = false, ...options } = {}) {
     if (!this.enabled) return null;
 
     const ac = new AbortController();
@@ -48,6 +55,7 @@ export const cloud = {
         const body = await res.text();
         // 테이블이 아직 없으면 더 두드려봐야 소용없어요.
         if (res.status === 404 || body.includes('PGRST205')) {
+          if (optional) return null;
           console.warn('[space-jump] Supabase 테이블이 없어요. supabase/schema.sql을 먼저 실행해 주세요.');
           disabled = true;
           this.status = 'no-table';
@@ -82,6 +90,37 @@ export const cloud = {
       `/players?user_key=eq.${encodeURIComponent(userKey)}&select=*&limit=1`
     );
     return Array.isArray(rows) && rows.length ? rows[0] : null;
+  },
+
+  /**
+   * 이 계정의 서버 기록을 통째로 지워요. (설정 화면의 「계정 초기화」)
+   *
+   * 표를 직접 delete하지 않고 함수를 불러요. anon 키에 delete 권한을 열면
+   * 그 키를 가진 누구든 표 전체를 비울 수 있거든요. 함수는 user_key 하나만 지워요.
+   * (supabase/schema.sql의 delete_account)
+   *
+   * players 한 줄이 사라지면 runs · achievements · tutorial_progress도 따라 지워져요.
+   *
+   * @returns {Promise<boolean>} 지웠는지. false면 서버가 아직 그대로예요.
+   */
+  async deleteAccount(userKey) {
+    if (!userKey) return false;
+    const res = await this._fetch('/rpc/delete_account', {
+      method: 'POST',
+      /*
+        optional을 꼭 켜둬야 해요.
+
+        아직 schema.sql을 안 돌린 프로젝트에서는 이 함수가 없어서 404가 와요.
+        optional이 없으면 _fetch가 그걸 "테이블이 통째로 없다"로 보고 **연동 전체를
+        꺼버려요.** 초기화 버튼 한 번 눌렀다가 그 세션 내내 랭킹·저장이 죽는 거예요.
+        여기서는 조용히 실패(null)하고, 부르는 쪽이 "못 지웠다"고 알려주면 돼요.
+      */
+      optional: true,
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ p_user_key: userKey }),
+    });
+    // 실패(null)와 성공(빈 배열)을 구분해야 해요. 실패했는데 지운 척하면 안 돼요.
+    return res !== null;
   },
 
   /**
@@ -158,6 +197,122 @@ export const cloud = {
         revives: run.revives | 0,
         reason: String(run.reason || '').slice(0, 40),
       }),
+    });
+  },
+
+  /* ────────────────────────────── 튜토리얼
+     테이블은 supabase/tutorial.sql로 따로 만들어요. (없어도 게임은 그대로 돌아가요) */
+
+  /**
+   * 튜토리얼을 깼는지 확인해요.
+   *
+   * 보상(보석 100개) 수령 여부는 여기 없어요. 그건 다른 업적들과 똑같이
+   * achievements 쪽에 있어요. (getAchievements)
+   *
+   * @returns {Promise<{cleared:boolean, version:number}|null>} null = 확인 실패
+   */
+  async getTutorial(userKey) {
+    if (!userKey) return null;
+    const rows = await this._fetch(
+      `/tutorial_progress?user_key=eq.${encodeURIComponent(userKey)}&select=cleared,cleared_version&limit=1`,
+      { optional: true }
+    );
+    if (!Array.isArray(rows)) return null;
+    if (!rows.length) return { cleared: false, version: 0 };
+    return {
+      cleared: rows[0].cleared === true,
+      version: Number(rows[0].cleared_version) || 0,
+    };
+  },
+
+  /**
+   * 튜토리얼 결과를 남겨요. (user_key 기준 upsert)
+   *
+   * 실패해도 조용히 넘어가요. 서버가 몰라도 로컬 세이브에 남아 있어서
+   * 같은 기기에서는 튜토리얼이 다시 뜨지 않아요.
+   */
+  async saveTutorial(userKey, { cleared = true, version = 1, retries = 0, skipped = false } = {}) {
+    if (!userKey) return null;
+    return this._fetch('/tutorial_progress', {
+      method: 'POST',
+      optional: true,
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        user_key: userKey,
+        cleared,
+        cleared_version: cleared ? version : 0,
+        retries: retries | 0,
+        skipped,
+        cleared_at: cleared ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+      }),
+    });
+  },
+
+  /* ────────────────────────────── 업적(칭호)
+     테이블은 supabase/achievements.sql로 따로 만들어요. (없어도 게임은 그대로 돌아가요) */
+
+  /**
+   * 내가 가진 업적과 **보상을 받았는지**.
+   *
+   * 둘을 같이 가져오는 게 중요해요. 얻은 것만 알고 받았는지를 모르면,
+   * 앱을 지웠다 깐 사람에게 보석을 한 번 더 주게 돼요.
+   *
+   * @returns {Promise<{code:string, claimed:boolean}[]|null>}
+   *          null = 확인 실패(서버 문제 · 테이블 없음)
+   */
+  async getAchievements(userKey) {
+    if (!userKey) return null;
+    const rows = await this._fetch(
+      `/achievements?user_key=eq.${encodeURIComponent(userKey)}&select=code,claimed_at`,
+      { optional: true }
+    );
+    if (!Array.isArray(rows)) return null;
+    // claimed_at 컬럼을 아직 안 붙인 프로젝트에서는 undefined가 와요 → "안 받음"으로 봐요.
+    return rows.map((r) => ({ code: r.code, claimed: Boolean(r.claimed_at) }));
+  },
+
+  /**
+   * 업적 보상(보석)을 받았다고 남겨요.
+   *
+   * 이미 있는 줄을 고치는 거라 PATCH를 써요. upsert로 하면 업적을 아직 안 올린
+   * 상태에서 "받았다"만 있는 유령 줄이 생길 수 있어요.
+   * 되돌리기·남의 줄 고치기는 서버 트리거가 막아요. (supabase/achievements.sql)
+   */
+  async claimAchievementReward(userKey, code, gems = 0) {
+    if (!userKey || !code) return null;
+    return this._fetch(
+      `/achievements?user_key=eq.${encodeURIComponent(userKey)}&code=eq.${encodeURIComponent(code)}`,
+      {
+        method: 'PATCH',
+        optional: true,
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ claimed_at: new Date().toISOString(), reward_gems: gems | 0 }),
+      }
+    );
+  },
+
+  /**
+   * 새로 얻은 업적을 올려요.
+   *
+   * ⚠️ `?on_conflict=user_key,code`가 **꼭 있어야** 해요.
+   *
+   * achievements의 기본키는 id(identity)라, 이걸 안 알려주면 PostgREST가
+   * "id가 겹치는지"만 보고 넘겨요. 그러면 (user_key, code) unique 제약에 걸린 게
+   * 그대로 23505로 튀어나오고, **여러 개를 한 번에 보낼 때 그중 하나만 이미 있어도
+   * 배열 전체가 통째로 거절돼요.** (한 문장으로 insert 되니까요)
+   * 나머지 새 업적까지 같이 날아가는 조용한 데이터 손실이에요.
+   *
+   * on_conflict을 붙이면 이미 있는 건 조용히 건너뛰고 새 것만 들어가요.
+   * 그래서 켤 때마다 통째로 올려도 안전합니다.
+   */
+  async addAchievements(userKey, codes) {
+    if (!userKey || !codes?.length) return null;
+    return this._fetch('/achievements?on_conflict=user_key,code', {
+      method: 'POST',
+      optional: true,
+      headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify(codes.map((code) => ({ user_key: userKey, code }))),
     });
   },
 

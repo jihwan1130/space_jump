@@ -4,10 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#05060f" />
-<title>SPACE JUMP — 지구에서 우주 끝까지</title>
+<title>궤도탈출 — 지구에서 우주 끝까지</title>
 <meta name="description" content="탭 한 번으로 행성 궤도를 갈아타는 원터치 아케이드. 스테이지와 기믹을 한눈에 보는 소개서." />
-<meta property="og:title" content="SPACE JUMP — 지구에서 우주 끝까지" />
-<meta property="og:description" content="탭 한 번으로 행성 궤도를 갈아타는 원터치 아케이드. 콤보를 쌓고 심우주까지 올라가세요." />
+<meta property="og:title" content="궤도탈출 — 지구에서 우주 끝까지" />
+<meta property="og:description" content="탭 한 번으로 행성 궤도를 갈아타는 원터치 아케이드. 콤보를 쌓아 행성 100개를 통과하고 관문을 돌파하세요." />
 <meta property="og:type" content="website" />
 <style>
 :root {
@@ -73,13 +73,29 @@ section + section { border-top: 1px solid var(--line); }
   margin-bottom: 20px;
 }
 
+/* 게임 홈 화면의 로고와 같은 처리 — 위아래 그라디언트 + 시안 발광 */
 .logo {
   font-size: clamp(46px, 13vw, 84px);
   font-weight: 800;
-  line-height: .98;
-  letter-spacing: -.03em;
+  line-height: 1.06;
+  letter-spacing: -.045em;
+  background: linear-gradient(180deg, #ffffff 0%, #eaf7ff 44%, #a6d4ef 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter:
+    drop-shadow(0 3px 14px rgba(0, 0, 0, .8))
+    drop-shadow(0 0 28px rgba(95, 208, 255, .3));
 }
-.logo span { display: block; color: var(--sky); }
+/* 한글 네 글자라 게임 화면과 똑같이 한 줄로 두고 뒤 두 글자만 강조해요. */
+.logo span {
+  background: linear-gradient(180deg, #a6ecff 0%, #5fd0ff 50%, #2f9fe4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
 
 .tagline {
   margin-top: 16px;
@@ -299,10 +315,10 @@ footer {
 <header class="hero">
   <div class="wrap">
     <p class="badge">원터치 아케이드 · 한 판 2분</p>
-    <h1 class="logo">SPACE<span>JUMP</span></h1>
+    <h1 class="logo">궤도<span>탈출</span></h1>
     <p class="tagline">
       탭 한 번이면 우주선이 날아갑니다.<br />
-      지구에서 출발해 심우주까지, 궤도를 갈아타며 올라가세요.
+      지구에서 출발해 100번째 행성 「관문」까지, 궤도를 갈아타며 올라가세요.
     </p>
 
     <div class="hero-demo"><canvas id="demo-hero"></canvas></div>
@@ -372,13 +388,11 @@ footer {
     <div class="grid">
       <div class="card">
         <figure><canvas class="ship" data-ship="falcon"></canvas></figure>
-        <span class="tag" style="background:rgba(60,255,225,.14); color:#5ff0dc;">멋짐</span>
         <h3>나이트팰컨 · 오로라 · 타이탄</h3>
         <p>레이더에 안 잡히는 각진 인터셉터, 빛의 띠를 남기는 유선형 크루저, 뭘 들이받아도 멀쩡할 것 같은 덩치.</p>
       </div>
       <div class="card">
         <figure><canvas class="ship" data-ship="dino"></canvas></figure>
-        <span class="tag" style="background:rgba(255,209,102,.16); color:#ffd166;">웃김</span>
         <h3>우주공룡 · 양 한 마리 · 성난독수리</h3>
         <p>우주복은 안 챙겼지만 자신감은 챙긴 공룡, 세다 보면 잠드는 양, 왜 화났는지 아무도 모르는 독수리.</p>
       </div>
@@ -470,10 +484,11 @@ footer {
 <section>
   <div class="wrap">
     <p class="kicker">STAGES</p>
-    <h2>지구에서 심우주까지</h2>
+    <h2>지구에서 관문까지, 행성 100개</h2>
     <p class="lead">
       행성 10개를 지날 때마다 스테이지가 오릅니다. 배경색과 BGM이 바뀌고, 스테이지 첫 행성은
-      더 크고 점수도 더 줘요. 명왕성 너머부터는 끝없이 이어지는 심우주 구간입니다.
+      더 크고 점수도 더 줘요. <b>100번째 행성 「관문」</b>에 닿으면 최종 보스전이 열리고,
+      이걸 이기면 게임을 끝까지 깬 겁니다.
     </p>
 
     <div class="table-scroll">
@@ -491,7 +506,7 @@ footer {
           <tr><td><span class="dot" style="background:#8fb4ff"></span>7 · 해왕성</td><td class="dim">행성 61–70</td><td class="dim">기믹 등장 확률이 계속 상승</td></tr>
           <tr><td><span class="dot" style="background:#f3e9dc"></span>8 · 명왕성</td><td class="dim">행성 71–80</td><td class="dim">태양계의 끝</td></tr>
           <tr><td><span class="dot" style="background:#e6b3ff"></span>9 · 외계행성</td><td class="dim">행성 81–90</td><td class="dim">미지의 색으로 물드는 구간</td></tr>
-          <tr><td><span class="dot" style="background:#b48bff"></span>10+ · 심우주</td><td class="dim">행성 91–</td><td class="dim">상승 속도 초당 50px, 무한히 이어짐</td></tr>
+          <tr><td><span class="dot" style="background:#ffd98f"></span>10 · 관문</td><td class="dim">행성 91–100</td><td class="dim">상승 속도 초당 50px · 100번째에서 최종 보스전</td></tr>
         </tbody>
       </table>
     </div>
@@ -593,14 +608,14 @@ footer {
 <!-- ══════════════ 마무리 ══════════════ -->
 <div class="finale">
   <div class="wrap">
-    <h2>어디까지 올라갈 수 있나요?</h2>
-    <p>대부분은 목성에서 멈춥니다. 심우주를 본 사람은 아직 많지 않아요.</p>
+    <h2>끝까지 갈 수 있나요?</h2>
+    <p>대부분은 목성에서 멈춥니다. 관문을 본 사람은 아직 많지 않아요.</p>
     <a class="cta" href="./index.html">한 판 해보기</a>
   </div>
 </div>
 
 <footer>
-  <div class="wrap">SPACE JUMP · 앱인토스 미니앱</div>
+  <div class="wrap">궤도탈출 · 앱인토스 미니앱</div>
 </footer>
 
 <script type="module">
@@ -616,7 +631,8 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 /** 캔버스를 DPR에 맞춰 세팅하고, 논리 좌표 크기를 돌려줘요. */
 function setup(canvas) {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  // 게임 화면과 같은 기준. 2로 묶으면 3x 화면에서 우주선 그림만 흐려져요.
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
   const w = canvas.clientWidth || 300;
   const h = canvas.clientHeight || 200;
   canvas.width = Math.round(w * dpr);
